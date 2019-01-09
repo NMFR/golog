@@ -9,13 +9,13 @@ func TestTransform(t *testing.T) {
 	tasks := Tasks{
 		Items: []Task{
 			// 2 hours 2 mins and 5 seconds for identifier-1
-			{"identifier-1", "start", "2016-01-02T15:04:00Z"},
-			{"identifier-1", "stop", "2016-01-02T17:04:02Z"},
-			{"identifier-1", "start", "2016-12-29T19:04:00Z"},
-			{"identifier-1", "stop", "2016-12-29T19:06:02Z"},
+			{"identifier-1", TaskStart, "2016-01-02T15:04:00Z"},
+			{"identifier-1", TaskStop, "2016-01-02T17:04:02Z"},
+			{"identifier-1", TaskStart, "2016-12-29T19:04:00Z"},
+			{"identifier-1", TaskStop, "2016-12-29T19:06:02Z"},
 			// 1 hour for identifier-2
-			{"identifier-2", "start", "2016-01-02T15:04:00Z"},
-			{"identifier-2", "stop", "2016-01-02T16:04:00Z"},
+			{"identifier-2", TaskStart, "2016-01-02T15:04:00Z"},
+			{"identifier-2", TaskStop, "2016-01-02T16:04:00Z"},
 		},
 	}
 	transformer := Transformer{LoadedTasks: tasks}
@@ -52,16 +52,16 @@ func TestTrackingToSeconds(t *testing.T) {
 	tasks := Tasks{
 		Items: []Task{
 			// 2 hours 2 mins and 5 seconds for identifier-1
-			{"identifier-1", "start", "2016-01-02T15:04:00Z"},
-			{"identifier-1", "stop", "2016-01-02T17:04:02Z"},
-			{"identifier-1", "start", "2016-12-29T19:04:00Z"},
-			{"identifier-1", "stop", "2016-12-29T19:06:02Z"},
+			{"identifier-1", TaskStart, "2016-01-02T15:04:00Z"},
+			{"identifier-1", TaskStop, "2016-01-02T17:04:02Z"},
+			{"identifier-1", TaskStart, "2016-12-29T19:04:00Z"},
+			{"identifier-1", TaskStop, "2016-12-29T19:06:02Z"},
 			// 1 hour for identifier-2
-			{"identifier-2", "start", "2016-01-02T15:04:00Z"},
-			{"identifier-2", "stop", "2016-01-02T16:04:00Z"},
+			{"identifier-2", TaskStart, "2016-01-02T15:04:00Z"},
+			{"identifier-2", TaskStop, "2016-01-02T16:04:00Z"},
 			// identifier-1 again to check positions
-			{"identifier-1", "start", "2017-01-01T19:06:02Z"},
-			{"identifier-1", "stop", "2017-01-01T19:06:03Z"},
+			{"identifier-1", TaskStart, "2017-01-01T19:06:02Z"},
+			{"identifier-1", TaskStop, "2017-01-01T19:06:03Z"},
 		},
 	}
 	transformer := Transformer{LoadedTasks: tasks}
@@ -83,7 +83,7 @@ func TestTrackingToSeconds(t *testing.T) {
 }
 
 func TestIsActive(t *testing.T) {
-	if !isActive(stop) {
+	if !isActive(TaskStop) {
 		t.Error("When the next entry to look is the stop action it should mean the task is active.")
 	}
 }

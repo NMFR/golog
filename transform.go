@@ -7,11 +7,6 @@ import (
 	"time"
 )
 
-const (
-	start = "start"
-	stop  = "stop"
-)
-
 // Transformer is a type that has loaded all Tasks entries from storage
 type Transformer struct {
 	LoadedTasks Tasks
@@ -52,18 +47,18 @@ func (transformer *Transformer) SecondsToHuman(totalSeconds int) string {
 // TrackingToSeconds get entries from storage by identifier and calculate
 // time between each start/stop for a single identifier
 func (transformer *Transformer) TrackingToSeconds(identifier string) (int, bool) {
-	nextAction := "start"
+	nextAction := TaskStart
 	var durationInSeconds float64
 	var startTime, stopTime time.Time
 
 	tasks := transformer.LoadedTasks.getByIdentifier(identifier)
 	for _, task := range tasks.Items {
-		if task.getAction() == start && nextAction == start {
-			nextAction = stop
+		if task.getAction() == TaskStart && nextAction == TaskStart {
+			nextAction = TaskStop
 			startTime = parseTime(task.getAt())
 		}
-		if task.getAction() == stop && nextAction == stop {
-			nextAction = start
+		if task.getAction() == TaskStop && nextAction == TaskStop {
+			nextAction = TaskStart
 			stopTime = parseTime(task.getAt())
 			durationInSeconds += stopTime.Sub(startTime).Seconds()
 		}
@@ -79,7 +74,7 @@ func (transformer *Transformer) TrackingToSeconds(identifier string) (int, bool)
 // we can check if a task is active if we reach the end of the loop
 // without finding the last stop action
 func isActive(nextAction string) bool {
-	return nextAction == stop
+	return nextAction == TaskStop
 }
 
 func parseTime(at string) time.Time {

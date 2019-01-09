@@ -83,6 +83,16 @@ $ golog clear
 All tasks were deleted.
 ```
 
+You can use the **export** command to export all the tasks to a file. 
+
+The available formats are: 
+
+- ical (.ics)
+
+``` sh
+golog export [ical] [file_path]
+```
+
 # Contribution Guidelines
 @TODO
 If you have any questions feel free to link @mlimaloureiro to the issue in question and we can review it together.

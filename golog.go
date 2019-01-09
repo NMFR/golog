@@ -4,11 +4,18 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/mitchellh/go-homedir"
+	homedir "github.com/mitchellh/go-homedir"
 )
+
+const (
+	exportICal = "ical"
+)
+
+var exporterNames = []string{exportICal}
 
 const alphanumericRegex = "^[a-zA-Z0-9_-]*$"
 const dbFile = "~/.golog"
@@ -45,6 +52,13 @@ var commands = []cli.Command{
 		Usage:  "List all tasks",
 		Action: List,
 	},
+	{
+		Name:         "export",
+		Usage:        "Export all tasks in a specific format",
+		ArgsUsage:    fmt.Sprintf("[%s] [filePath]", strings.Join(exporterNames, " | ")),
+		Action:       Export,
+		BashComplete: AutocompleteExport,
+	},
 }
 
 // Start a given task
@@ -54,7 +68,7 @@ func Start(context *cli.Context) error {
 		return invalidIdentifier(identifier)
 	}
 
-	err := repository.save(Task{Identifier: identifier, Action: "start", At: time.Now().Format(time.RFC3339)})
+	err := repository.save(Task{Identifier: identifier, Action: TaskStart, At: time.Now().Format(time.RFC3339)})
 
 	if err == nil {
 		fmt.Println("Started tracking ", identifier)
@@ -69,7 +83,7 @@ func Stop(context *cli.Context) error {
 		return invalidIdentifier(identifier)
 	}
 
-	err := repository.save(Task{Identifier: identifier, Action: "stop", At: time.Now().Format(time.RFC3339)})
+	err := repository.save(Task{Identifier: identifier, Action: TaskStop, At: time.Now().Format(time.RFC3339)})
 
 	if err == nil {
 		fmt.Println("Stopped tracking ", identifier)
@@ -107,6 +121,45 @@ func List(context *cli.Context) error {
 	return nil
 }
 
+// Export all tasks to a specific format
+func Export(context *cli.Context) error {
+	format, outputFilePath := context.Args().Get(0), context.Args().Get(1)
+
+	if format == "" {
+		format = exportICal
+	}
+
+	var exporter TaskExporterInterface
+	switch format {
+	case exportICal:
+		exporter = ICalTaskExporter{}
+	}
+
+	if exporter == nil {
+		return fmt.Errorf("invalid format \"%s\"", format)
+	}
+
+	if outputFilePath == "" {
+		outputFilePath = fmt.Sprintf("./golog.%s", exporter.GetFileExtension())
+	}
+
+	tasks, err := repository.load()
+	if err != nil {
+		return err
+	}
+
+	var file *os.File
+	file, err = os.OpenFile(outputFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = exporter.Export(tasks, file)
+
+	return err
+}
+
 // Clear all data
 func Clear(context *cli.Context) error {
 	err := repository.clear()
@@ -140,6 +193,17 @@ func IsValidIdentifier(identifier string) bool {
 func checkInitialDbFile() {
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		os.Create(dbPath)
+	}
+}
+
+// AutocompleteExport shows the list of available export formats
+func AutocompleteExport(context *cli.Context) {
+	if len(context.Args()) > 0 {
+		return
+	}
+
+	for _, exporter := range exporterNames {
+		fmt.Println(exporter)
 	}
 }
 

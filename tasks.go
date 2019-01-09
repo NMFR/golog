@@ -1,5 +1,12 @@
 package main
 
+const (
+	// TaskStart is a constant that represents the start of the task
+	TaskStart = "start"
+	// TaskStop is a constant that represents the pause / end of the task
+	TaskStop = "stop"
+)
+
 // Tasks Struct with tasks items
 type Tasks struct {
 	Items []Task
