@@ -1,22 +1,23 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/mlimaloureiro/golog/models"
+)
 
 const hourInSeconds = 3600
 const hourInMinutes = 60
 
 func TestTransform(t *testing.T) {
-	tasks := Tasks{
-		Items: []Task{
-			// 2 hours 2 mins and 5 seconds for identifier-1
-			{"identifier-1", TaskStart, "2016-01-02T15:04:00Z"},
-			{"identifier-1", TaskStop, "2016-01-02T17:04:02Z"},
-			{"identifier-1", TaskStart, "2016-12-29T19:04:00Z"},
-			{"identifier-1", TaskStop, "2016-12-29T19:06:02Z"},
-			// 1 hour for identifier-2
-			{"identifier-2", TaskStart, "2016-01-02T15:04:00Z"},
-			{"identifier-2", TaskStop, "2016-01-02T16:04:00Z"},
-		},
+	tasks := models.Tasks{
+		{Identifier: "identifier-1", Activity: []models.TaskActivity{
+			{StartDate: timeFromString("2016-01-02T15:04:00Z"), EndDate: timeFromString("2016-01-02T17:04:02Z")},
+			{StartDate: timeFromString("2016-12-29T19:04:00Z"), EndDate: timeFromString("2016-12-29T19:06:02Z")},
+		}},
+		{Identifier: "identifier-2", Activity: []models.TaskActivity{
+			{StartDate: timeFromString("2016-01-02T15:04:00Z"), EndDate: timeFromString("2016-01-02T16:04:00Z")},
+		}},
 	}
 	transformer := Transformer{LoadedTasks: tasks}
 	transformedTasks := transformer.Transform()
@@ -49,41 +50,30 @@ func TestSecondsToHuman(t *testing.T) {
 }
 
 func TestTrackingToSeconds(t *testing.T) {
-	tasks := Tasks{
-		Items: []Task{
-			// 2 hours 2 mins and 5 seconds for identifier-1
-			{"identifier-1", TaskStart, "2016-01-02T15:04:00Z"},
-			{"identifier-1", TaskStop, "2016-01-02T17:04:02Z"},
-			{"identifier-1", TaskStart, "2016-12-29T19:04:00Z"},
-			{"identifier-1", TaskStop, "2016-12-29T19:06:02Z"},
-			// 1 hour for identifier-2
-			{"identifier-2", TaskStart, "2016-01-02T15:04:00Z"},
-			{"identifier-2", TaskStop, "2016-01-02T16:04:00Z"},
-			// identifier-1 again to check positions
-			{"identifier-1", TaskStart, "2017-01-01T19:06:02Z"},
-			{"identifier-1", TaskStop, "2017-01-01T19:06:03Z"},
-		},
+	tasks := models.Tasks{
+		{Identifier: "identifier-1", Activity: []models.TaskActivity{
+			{StartDate: timeFromString("2016-01-02T15:04:00Z"), EndDate: timeFromString("2016-01-02T17:04:02Z")},
+			{StartDate: timeFromString("2016-12-29T19:04:00Z"), EndDate: timeFromString("2016-12-29T19:06:02Z")},
+			{StartDate: timeFromString("2017-01-01T19:06:02Z"), EndDate: timeFromString("2017-01-01T19:06:03Z")},
+		}},
+		{Identifier: "identifier-2", Activity: []models.TaskActivity{
+			{StartDate: timeFromString("2016-01-02T15:04:00Z"), EndDate: timeFromString("2016-01-02T16:04:00Z")},
+		}},
 	}
 	transformer := Transformer{LoadedTasks: tasks}
 	// @todo test status
-	seconds, _ := transformer.TrackingToSeconds("identifier-1")
+	seconds := transformer.TrackingToSeconds(tasks[0])
 	if seconds != hourInSeconds*2+hourInMinutes*2+5 {
 		t.Errorf(
 			"Transformation for identifier-1 should be 7325 seconds, got %d.",
 			seconds,
 		)
 	}
-	seconds, _ = transformer.TrackingToSeconds("identifier-2")
+	seconds = transformer.TrackingToSeconds(tasks[1])
 	if seconds != hourInSeconds*1 {
 		t.Errorf(
 			"Transformation for identifier-1 should be 3600 seconds, got %d.",
 			seconds,
 		)
-	}
-}
-
-func TestIsActive(t *testing.T) {
-	if !isActive(TaskStop) {
-		t.Error("When the next entry to look is the stop action it should mean the task is active.")
 	}
 }

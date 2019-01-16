@@ -1,6 +1,10 @@
 package main
 
-import "io"
+import (
+	"io"
+
+	"github.com/mlimaloureiro/golog/models"
+)
 
 const prodID = "-//mlimaloureiro/golog"
 
@@ -58,23 +62,20 @@ func (iCalTaskExporter ICalTaskExporter) writeICalFooter(writer io.Writer) error
 	return err
 }
 
-func (iCalTaskExporter ICalTaskExporter) writeICalEvent(startTask Task, stopTask *Task, writer io.Writer) error {
-	startTime := parseTime(startTask.getAt())
-
+func (iCalTaskExporter ICalTaskExporter) writeICalEvent(task models.Task, taskActivity models.TaskActivity, writer io.Writer) error {
 	if err := writeStrings(
 		writer,
 		"BEGIN:VEVENT\n",
-		"SUMMARY:", startTask.getIdentifier(), "\n",
-		"DTSTART:", startTime.UTC().Format(iCalTaskExporter.getTimeFormat()), "\n",
+		"SUMMARY:", task.Identifier, "\n",
+		"DTSTART:", taskActivity.StartDate.UTC().Format(iCalTaskExporter.getTimeFormat()), "\n",
 	); err != nil {
 		return err
 	}
 
-	if stopTask != nil {
-		stopTime := parseTime(stopTask.getAt())
+	if taskActivity.IsRunning() == false {
 		if err := writeStrings(
 			writer,
-			"DTEND:", stopTime.UTC().Format(iCalTaskExporter.getTimeFormat()), "\n",
+			"DTEND:", taskActivity.EndDate.UTC().Format(iCalTaskExporter.getTimeFormat()), "\n",
 		); err != nil {
 			return err
 		}
@@ -88,34 +89,18 @@ func (iCalTaskExporter ICalTaskExporter) writeICalEvent(startTask Task, stopTask
 }
 
 // Export tasks in the ical format to the writer
-func (iCalTaskExporter ICalTaskExporter) Export(tasks Tasks, writer io.Writer) error {
+func (iCalTaskExporter ICalTaskExporter) Export(tasks models.Tasks, writer io.Writer) error {
 	var err error
 
 	if err = iCalTaskExporter.writeICalHeader(writer); err != nil {
 		return err
 	}
 
-	taskMap := map[string]Task{}
-	for _, task := range tasks.Items {
-		switch task.getAction() {
-		case TaskStart:
-			taskMap[task.getIdentifier()] = task
-		case TaskStop:
-			if startTask, inMap := taskMap[task.getIdentifier()]; inMap {
-				err = iCalTaskExporter.writeICalEvent(startTask, &task, writer)
-				if err != nil {
-					return err
-				}
-				delete(taskMap, task.getIdentifier())
+	for _, task := range tasks {
+		for _, taskActivity := range task.Activity {
+			if err = iCalTaskExporter.writeICalEvent(task, taskActivity, writer); err != nil {
+				return err
 			}
-		}
-	}
-
-	// Iterate running tasks:
-	for _, startTask := range taskMap {
-		err = iCalTaskExporter.writeICalEvent(startTask, nil, writer)
-		if err != nil {
-			return err
 		}
 	}
 

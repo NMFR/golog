@@ -5,22 +5,23 @@ import (
 	"math"
 	"os"
 	"time"
+
+	"github.com/mlimaloureiro/golog/models"
 )
 
 // Transformer is a type that has loaded all Tasks entries from storage
 type Transformer struct {
-	LoadedTasks Tasks
+	LoadedTasks models.Tasks
 }
 
 // Transform Transforms all tasks to human readable
 func (transformer *Transformer) Transform() map[string]string {
 	transformedTasks := map[string]string{}
-	tasks := transformer.LoadedTasks.Items
+
+	tasks := transformer.LoadedTasks
 	for _, task := range tasks {
-		if _, inMap := transformedTasks[task.getIdentifier()]; inMap {
-			continue
-		}
-		taskSeconds, isActive := transformer.TrackingToSeconds(task.getIdentifier())
+		isActive := task.IsRunning()
+		taskSeconds := transformer.TrackingToSeconds(task)
 		humanTime := transformer.SecondsToHuman(taskSeconds)
 
 		status := ""
@@ -28,8 +29,8 @@ func (transformer *Transformer) Transform() map[string]string {
 			status = "(running)"
 		}
 
-		transformedTask := fmt.Sprintf("%s    %s %s", humanTime, task.getIdentifier(), status)
-		transformedTasks[task.getIdentifier()] = transformedTask
+		transformedTask := fmt.Sprintf("%s    %s %s", humanTime, task.Identifier, status)
+		transformedTasks[task.Identifier] = transformedTask
 	}
 
 	return transformedTasks
@@ -46,35 +47,8 @@ func (transformer *Transformer) SecondsToHuman(totalSeconds int) string {
 
 // TrackingToSeconds get entries from storage by identifier and calculate
 // time between each start/stop for a single identifier
-func (transformer *Transformer) TrackingToSeconds(identifier string) (int, bool) {
-	nextAction := TaskStart
-	var durationInSeconds float64
-	var startTime, stopTime time.Time
-
-	tasks := transformer.LoadedTasks.getByIdentifier(identifier)
-	for _, task := range tasks.Items {
-		if task.getAction() == TaskStart && nextAction == TaskStart {
-			nextAction = TaskStop
-			startTime = parseTime(task.getAt())
-		}
-		if task.getAction() == TaskStop && nextAction == TaskStop {
-			nextAction = TaskStart
-			stopTime = parseTime(task.getAt())
-			durationInSeconds += stopTime.Sub(startTime).Seconds()
-		}
-	}
-
-	if isActive(nextAction) {
-		durationInSeconds += time.Since(startTime).Seconds()
-	}
-
-	return int(durationInSeconds), isActive(nextAction)
-}
-
-// we can check if a task is active if we reach the end of the loop
-// without finding the last stop action
-func isActive(nextAction string) bool {
-	return nextAction == TaskStop
+func (transformer *Transformer) TrackingToSeconds(task models.Task) int {
+	return (int)(task.Duration().Seconds())
 }
 
 func parseTime(at string) time.Time {

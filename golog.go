@@ -5,7 +5,9 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
+
+	"github.com/mlimaloureiro/golog/models"
+	"github.com/mlimaloureiro/golog/repositories"
 
 	"github.com/codegangsta/cli"
 	homedir "github.com/mitchellh/go-homedir"
@@ -21,7 +23,8 @@ const alphanumericRegex = "^[a-zA-Z0-9_-]*$"
 const dbFile = "~/.golog"
 
 var dbPath, _ = homedir.Expand(dbFile)
-var repository = TaskCsvRepository{Path: dbPath}
+var csvFile *os.File
+var taskRepository models.TaskRepositoryInterface
 var transformer = Transformer{}
 var commands = []cli.Command{
 	{
@@ -68,7 +71,7 @@ func Start(context *cli.Context) error {
 		return invalidIdentifier(identifier)
 	}
 
-	err := repository.save(Task{Identifier: identifier, Action: TaskStart, At: time.Now().Format(time.RFC3339)})
+	err := taskRepository.StartTask(identifier)
 
 	if err == nil {
 		fmt.Println("Started tracking ", identifier)
@@ -83,7 +86,7 @@ func Stop(context *cli.Context) error {
 		return invalidIdentifier(identifier)
 	}
 
-	err := repository.save(Task{Identifier: identifier, Action: TaskStop, At: time.Now().Format(time.RFC3339)})
+	err := taskRepository.PauseTask(identifier)
 
 	if err == nil {
 		fmt.Println("Stopped tracking ", identifier)
@@ -98,11 +101,11 @@ func Status(context *cli.Context) error {
 		return invalidIdentifier(identifier)
 	}
 
-	tasks, err := repository.load()
+	tasks, err := taskRepository.GetTasks()
 	if err != nil {
 		return err
 	}
-	transformer.LoadedTasks = tasks.getByIdentifier(identifier)
+	transformer.LoadedTasks = tasks
 	fmt.Println(transformer.Transform()[identifier])
 	return nil
 }
@@ -110,7 +113,7 @@ func Status(context *cli.Context) error {
 // List lists all tasks
 func List(context *cli.Context) error {
 	var err error
-	transformer.LoadedTasks, err = repository.load()
+	transformer.LoadedTasks, err = taskRepository.GetTasks()
 	if err != nil {
 		return err
 	}
@@ -143,7 +146,7 @@ func Export(context *cli.Context) error {
 		outputFilePath = fmt.Sprintf("./golog.%s", exporter.GetFileExtension())
 	}
 
-	tasks, err := repository.load()
+	tasks, err := taskRepository.GetTasks()
 	if err != nil {
 		return err
 	}
@@ -162,7 +165,7 @@ func Export(context *cli.Context) error {
 
 // Clear all data
 func Clear(context *cli.Context) error {
-	err := repository.clear()
+	err := csvFile.Truncate(0)
 	if err == nil {
 		fmt.Println("All tasks deleted")
 	}
@@ -172,15 +175,15 @@ func Clear(context *cli.Context) error {
 // AutocompleteTasks loads tasks from repository and show them for completion
 func AutocompleteTasks(context *cli.Context) {
 	var err error
-	transformer.LoadedTasks, err = repository.load()
+	transformer.LoadedTasks, err = taskRepository.GetTasks()
 	// This will complete if no args are passed
 	//   or there is problem with tasks repo
 	if len(context.Args()) > 0 || err != nil {
 		return
 	}
 
-	for _, task := range transformer.LoadedTasks.Items {
-		fmt.Println(task.getIdentifier())
+	for _, task := range transformer.LoadedTasks {
+		fmt.Println(task.Identifier)
 	}
 }
 
@@ -208,6 +211,16 @@ func AutocompleteExport(context *cli.Context) {
 }
 
 func main() {
+	var err error
+	csvFile, err = os.OpenFile(dbPath, os.O_RDWR|os.O_APPEND, 0600)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer csvFile.Close()
+
+	taskRepository = repositories.NewCsvTaskRepository(csvFile)
+
 	// @todo remove this from here, should be in file repo implementation
 	checkInitialDbFile()
 	app := cli.NewApp()
@@ -216,7 +229,7 @@ func main() {
 	app.Version = "0.1"
 	app.EnableBashCompletion = true
 	app.Commands = commands
-	err := app.Run(os.Args)
+	err = app.Run(os.Args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
