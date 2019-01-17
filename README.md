@@ -87,10 +87,11 @@ You can use the **export** command to export all the tasks to a file.
 
 The available formats are: 
 
+- csv (.csv)
 - ical (.ics)
 
 ``` sh
-golog export [ical] [file_path]
+golog export [csv | ical] [file_path]
 ```
 
 # Contribution Guidelines

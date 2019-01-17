@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"os"
-	"time"
 
 	"github.com/mlimaloureiro/golog/models"
 )
@@ -49,14 +47,4 @@ func (transformer *Transformer) SecondsToHuman(totalSeconds int) string {
 // time between each start/stop for a single identifier
 func (transformer *Transformer) TrackingToSeconds(task models.Task) int {
 	return (int)(task.Duration().Seconds())
-}
-
-func parseTime(at string) time.Time {
-	then, err := time.Parse(time.RFC3339, at)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	return then
 }

@@ -2,12 +2,18 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/mlimaloureiro/golog/models"
 )
 
 const hourInSeconds = 3600
 const hourInMinutes = 60
+
+func timeFromString(str string) time.Time {
+	date, _ := time.Parse(time.RFC3339, str)
+	return date
+}
 
 func TestTransform(t *testing.T) {
 	tasks := models.Tasks{
