@@ -27,19 +27,19 @@ var commands = []cli.Command{
 		Name:         "start",
 		Usage:        "Start tracking a given task",
 		Action:       Start,
-		BashComplete: AutocompleteTasks,
+		BashComplete: AutocompletePausedTasks,
 	},
 	{
 		Name:         "stop",
 		Usage:        "Stop tracking a given task",
 		Action:       Stop,
-		BashComplete: AutocompleteTasks,
+		BashComplete: AutocompleteRunningTasks,
 	},
 	{
 		Name:         "status",
 		Usage:        "Give status of all tasks",
 		Action:       Status,
-		BashComplete: AutocompleteTasks,
+		BashComplete: AutocompleteAllTasks,
 	},
 	{
 		Name:   "clear",
@@ -153,19 +153,41 @@ func Clear(context *cli.Context) error {
 	return err
 }
 
-// AutocompleteTasks loads tasks from repository and show them for completion
-func AutocompleteTasks(context *cli.Context) {
-	var err error
-	transformer.LoadedTasks, err = taskService.GetTasks()
-	// This will complete if no args are passed
-	//   or there is problem with tasks repo
+func autocompleteTasks(context *cli.Context, filter func(task tasksModel.Task) bool) {
+	tasks, err := taskService.GetTasks()
 	if len(context.Args()) > 0 || err != nil {
 		return
 	}
 
-	for _, task := range transformer.LoadedTasks {
-		fmt.Println(task.Identifier)
+	for _, task := range tasks {
+		if filter(task) {
+			fmt.Println(task.Identifier)
+		}
 	}
+}
+
+// AutocompleteRunningTasks loads running tasks from repository and show them for completion
+func AutocompleteRunningTasks(context *cli.Context) {
+	autocompleteTasks(
+		context,
+		func(task tasksModel.Task) bool { return task.IsRunning() },
+	)
+}
+
+// AutocompletePausedTasks loads paused tasks from repository and show them for completion
+func AutocompletePausedTasks(context *cli.Context) {
+	autocompleteTasks(
+		context,
+		func(task tasksModel.Task) bool { return !task.IsRunning() },
+	)
+}
+
+// AutocompleteAllTasks loads all tasks from repository and show them for completion
+func AutocompleteAllTasks(context *cli.Context) {
+	autocompleteTasks(
+		context,
+		func(task tasksModel.Task) bool { return true },
+	)
 }
 
 // AutocompleteExport shows the list of available export formats
