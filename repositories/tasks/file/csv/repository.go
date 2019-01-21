@@ -1,9 +1,11 @@
-package csv // import github.com/mlimaloureiro/golog/repositories/file/csv
+package csv // import github.com/mlimaloureiro/golog/repositories/tasks/file/csv
 
 import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"os"
+	"syscall"
 	"time"
 
 	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
@@ -30,26 +32,18 @@ func tryParseTime(str string) time.Time {
 	return date
 }
 
-func trySeek(readWriter io.ReadWriter, offset int64, whence int) (int64, error) {
-	seeker, isSeekable := readWriter.(io.Seeker)
-	if isSeekable == false {
-		return 0, nil
-	}
-	return seeker.Seek(offset, whence)
-}
-
 // TaskRepository is a Task repository that stores its data in the CSV format
 type TaskRepository struct {
-	readWriter io.ReadWriter
+	filePath string
 }
 
-// NewTaskRepository creates a new TaskRepository
-func NewTaskRepository(readWriter io.ReadWriter) TaskRepository {
-	return TaskRepository{readWriter}
+// New creates a new csv TaskRepository
+func New(filePath string) TaskRepository {
+	return TaskRepository{filePath}
 }
 
-func (repository TaskRepository) writeTaskAction(identifier string, action taskAction, at time.Time) error {
-	writer := csv.NewWriter(repository.readWriter)
+func (repository TaskRepository) writeTaskAction(readWriter io.ReadWriter, identifier string, action taskAction, at time.Time) error {
+	writer := csv.NewWriter(readWriter)
 	if err := writer.Write([]string{identifier, string(action), formatTime(at)}); err != nil {
 		return err
 	}
@@ -62,26 +56,45 @@ func (repository TaskRepository) writeTaskAction(identifier string, action taskA
 
 // StartTask starts the Task with the identifier if the Task is not already running
 //  If the Task does not exist it will be created
-func (repository TaskRepository) StartTask(identifier string) error {
-	if _, err := trySeek(repository.readWriter, 0, io.SeekEnd); err != nil {
+func (repository TaskRepository) StartTask(identifier string) (err error) {
+	file, err := os.OpenFile(repository.filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
 		return err
 	}
-	return repository.writeTaskAction(identifier, taskStart, time.Now())
+	defer func() {
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	return repository.writeTaskAction(file, identifier, taskStart, time.Now())
 }
 
 // PauseTask pauses the Task with the identifier if the Task is already running
-func (repository TaskRepository) PauseTask(identifier string) error {
-	if _, err := trySeek(repository.readWriter, 0, io.SeekEnd); err != nil {
+func (repository TaskRepository) PauseTask(identifier string) (err error) {
+	file, err := os.OpenFile(repository.filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
 		return err
 	}
-	return repository.writeTaskAction(identifier, taskStop, time.Now())
+	defer func() {
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	return repository.writeTaskAction(file, identifier, taskStop, time.Now())
 }
 
 // SetTask will create or update the Task in the rerpository, if the task already exists in the repository its data will be overriden by the new Task
 func (repository TaskRepository) SetTask(task tasksModel.Task) error {
 	tasks, err := repository.GetTasks()
 	if err != nil {
-		return err
+		// Ignore "no such file" errors here:
+		if pathErr, isPathErr := err.(*os.PathError); !isPathErr || pathErr.Err != syscall.ENOENT {
+			return err
+		}
+
+		tasks = tasksModel.Collection{}
 	}
 
 	if taskPtr := tasks.GetByIdentifier(task.Identifier); taskPtr == nil {
@@ -95,18 +108,24 @@ func (repository TaskRepository) SetTask(task tasksModel.Task) error {
 }
 
 // SetTasks will delete all tasks of the repository and insert the tasks passed by parameter
-func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) error {
-	if _, err := trySeek(repository.readWriter, 0, io.SeekStart); err != nil {
+func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) (err error) {
+	file, err := os.OpenFile(repository.filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}()
 
 	for _, task := range tasks {
 		for _, taskActivity := range task.Activity {
-			if err := repository.writeTaskAction(task.Identifier, taskStart, taskActivity.StartDate); err != nil {
+			if err := repository.writeTaskAction(file, task.Identifier, taskStart, taskActivity.StartDate); err != nil {
 				return err
 			}
 			if !taskActivity.EndDate.IsZero() {
-				if err := repository.writeTaskAction(task.Identifier, taskStop, taskActivity.EndDate); err != nil {
+				if err := repository.writeTaskAction(file, task.Identifier, taskStop, taskActivity.EndDate); err != nil {
 					return err
 				}
 			}
@@ -116,19 +135,25 @@ func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) error {
 }
 
 // GetTasks returns all Tasks of the repository
-func (repository TaskRepository) GetTasks() (tasksModel.Collection, error) {
-	if _, err := trySeek(repository.readWriter, 0, io.SeekStart); err != nil {
+func (repository TaskRepository) GetTasks() (tasks tasksModel.Collection, err error) {
+	file, err := os.OpenFile(repository.filePath, os.O_RDONLY, 0600)
+	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}()
 
-	reader := csv.NewReader(repository.readWriter)
+	reader := csv.NewReader(file)
 	reader.FieldsPerRecord = -1
 	rawCsvData, err := reader.ReadAll()
 	if err != nil {
 		return nil, err
 	}
 
-	tasks := tasksModel.Collection{}
+	tasks = tasksModel.Collection{}
 	for i, line := range rawCsvData {
 		if len(line) != 3 {
 			return nil, fmt.Errorf("csvfile: malformed line %d: %q", i, line)

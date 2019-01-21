@@ -1,7 +1,9 @@
-package ical // import github.com/mlimaloureiro/golog/repositories/file/ical
+package ical // import github.com/mlimaloureiro/golog/repositories/tasks/file/ical
 
 import (
 	"io"
+	"os"
+	"syscall"
 	"time"
 
 	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
@@ -25,14 +27,6 @@ func tryParseTime(str string) time.Time {
 	return date
 }
 
-func trySeek(readWriter io.ReadWriter, offset int64, whence int) (int64, error) {
-	seeker, isSeekable := readWriter.(io.Seeker)
-	if isSeekable == false {
-		return 0, nil
-	}
-	return seeker.Seek(offset, whence)
-}
-
 func writeStrings(writer io.Writer, strings ...string) error {
 	for _, str := range strings {
 		_, err := io.WriteString(writer, str)
@@ -54,24 +48,25 @@ func (consumer *calendarConsumer) ConsumeICal(calendar *goics.Calendar, err erro
 
 // TaskRepository is a Task repository that stores its data in the ical (ics) format
 type TaskRepository struct {
-	readWriter io.ReadWriter
+	filePath   string
 	Version    string
 	CALSCALE   string
 	TimeFormat string // UTC time format string (layout string passed to time.Format)
 }
 
-// NewTaskRepository creates a new TaskRepository
-func NewTaskRepository(readWriter io.ReadWriter) TaskRepository {
-	repository := TaskRepository{readWriter: readWriter}
-	repository.Version = "2.0"
-	repository.CALSCALE = "GREGORIAN"
-	repository.TimeFormat = "20060102T150405Z"
-	return repository
+// New creates a new ical TaskRepository
+func New(filePath string) TaskRepository {
+	return TaskRepository{
+		filePath:   filePath,
+		Version:    "2.0",
+		CALSCALE:   "GREGORIAN",
+		TimeFormat: "20060102T150405Z",
+	}
 }
 
-func (repository TaskRepository) writeICalHeader() error {
+func (repository TaskRepository) writeICalHeader(readWriter io.ReadWriter) error {
 	err := writeStrings(
-		repository.readWriter,
+		readWriter,
 		"BEGIN:VCALENDAR\n",
 		"SUMMARY:", repository.Version, "\n",
 		"PRODID:", prodID, "\n",
@@ -80,14 +75,14 @@ func (repository TaskRepository) writeICalHeader() error {
 	return err
 }
 
-func (repository TaskRepository) writeICalFooter() error {
-	_, err := io.WriteString(repository.readWriter, "END:VCALENDAR")
+func (repository TaskRepository) writeICalFooter(readWriter io.ReadWriter) error {
+	_, err := io.WriteString(readWriter, "END:VCALENDAR")
 	return err
 }
 
-func (repository TaskRepository) writeICalEvent(task tasksModel.Task, taskActivity tasksModel.TaskActivity) error {
+func (repository TaskRepository) writeICalEvent(readWriter io.ReadWriter, task tasksModel.Task, taskActivity tasksModel.TaskActivity) error {
 	if err := writeStrings(
-		repository.readWriter,
+		readWriter,
 		"BEGIN:VEVENT\n",
 		"SUMMARY:", task.Identifier, "\n",
 		"DTSTART:", taskActivity.StartDate.UTC().Format(repository.TimeFormat), "\n",
@@ -97,71 +92,30 @@ func (repository TaskRepository) writeICalEvent(task tasksModel.Task, taskActivi
 
 	if !taskActivity.IsRunning() {
 		if err := writeStrings(
-			repository.readWriter,
+			readWriter,
 			"DTEND:", taskActivity.EndDate.UTC().Format(repository.TimeFormat), "\n",
 		); err != nil {
 			return err
 		}
 	}
 
-	if err := writeStrings(repository.readWriter, "END:VEVENT\n"); err != nil {
+	if err := writeStrings(readWriter, "END:VEVENT\n"); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// StartTask starts the Task with the identifier if the Task is not already running
-//  If the Task does not exist it will be created
-func (repository TaskRepository) StartTask(identifier string) error {
-	tasks, err := repository.GetTasks()
-	if err != nil {
-		return err
-	}
-
-	task := tasks.GetByIdentifier(identifier)
-	if task == nil {
-		tasks = append(tasks, tasksModel.Task{Identifier: identifier, Activity: []tasksModel.TaskActivity{}})
-		task = &tasks[len(tasks)-1]
-	}
-
-	if (*task).IsRunning() {
-		return nil
-	}
-	(*task).Activity = append((*task).Activity, tasksModel.TaskActivity{StartDate: time.Now()})
-
-	err = repository.SetTasks(tasks)
-	return err
-}
-
-// PauseTask pauses the Task with the identifier if the Task is already running
-func (repository TaskRepository) PauseTask(identifier string) error {
-	tasks, err := repository.GetTasks()
-	if err != nil {
-		return err
-	}
-
-	task := tasks.GetByIdentifier(identifier)
-	if task == nil {
-		return nil
-	}
-
-	taskActivity := (*task).GetRunningTaskActivity()
-	if taskActivity == nil {
-		return nil
-	}
-
-	(*taskActivity).EndDate = time.Now()
-
-	err = repository.SetTasks(tasks)
-	return err
-}
-
 // SetTask will create or update the Task in the rerpository, if the task already exists in the repository its data will be overriden by the new Task
 func (repository TaskRepository) SetTask(task tasksModel.Task) error {
 	tasks, err := repository.GetTasks()
 	if err != nil {
-		return err
+		// Ignore "no such file" errors here:
+		if pathErr, isPathErr := err.(*os.PathError); !isPathErr || pathErr.Err != syscall.ENOENT {
+			return err
+		}
+
+		tasks = tasksModel.Collection{}
 	}
 
 	if taskPtr := tasks.GetByIdentifier(task.Identifier); taskPtr == nil {
@@ -175,36 +129,48 @@ func (repository TaskRepository) SetTask(task tasksModel.Task) error {
 }
 
 // SetTasks will delete all tasks of the repository and insert the tasks passed by parameter
-func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) error {
-	if _, err := trySeek(repository.readWriter, 0, io.SeekStart); err != nil {
+func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) (err error) {
+	file, err := os.OpenFile(repository.filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}()
 
-	if err := repository.writeICalHeader(); err != nil {
+	if err = repository.writeICalHeader(file); err != nil {
 		return err
 	}
 
 	for _, task := range tasks {
 		for _, taskActivity := range task.Activity {
-			if err := repository.writeICalEvent(task, taskActivity); err != nil {
+			if err = repository.writeICalEvent(file, task, taskActivity); err != nil {
 				return err
 			}
 		}
 	}
 
-	err := repository.writeICalFooter()
+	err = repository.writeICalFooter(file)
 	return err
 }
 
 // GetTasks returns all Tasks of the repository
-func (repository TaskRepository) GetTasks() (tasksModel.Collection, error) {
-	if _, err := trySeek(repository.readWriter, 0, io.SeekStart); err != nil {
+func (repository TaskRepository) GetTasks() (tasks tasksModel.Collection, err error) {
+	file, err := os.OpenFile(repository.filePath, os.O_RDONLY, 0600)
+	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}()
 
-	icalDecoder := goics.NewDecoder(repository.readWriter)
+	icalDecoder := goics.NewDecoder(file)
 	consumer := calendarConsumer{}
-	err := icalDecoder.Decode(&consumer)
+	err = icalDecoder.Decode(&consumer)
 	if err != nil {
 		if err == goics.ErrCalendarNotFound {
 			return tasksModel.Collection{}, nil
@@ -212,7 +178,7 @@ func (repository TaskRepository) GetTasks() (tasksModel.Collection, error) {
 		return nil, err
 	}
 
-	tasks := tasksModel.Collection{}
+	tasks = tasksModel.Collection{}
 	for _, event := range icalDecoder.Calendar.Events {
 		summaryNode, startDateNode, endDateNode := event.Data["SUMMARY"], event.Data["DTSTART"], event.Data["DTEND"]
 		if summaryNode == nil || startDateNode == nil {

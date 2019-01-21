@@ -8,26 +8,19 @@ import (
 	"strings"
 
 	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
-	"github.com/mlimaloureiro/golog/repositories"
-	"github.com/mlimaloureiro/golog/repositories/file/csv"
-	"github.com/mlimaloureiro/golog/repositories/file/ical"
+	"github.com/mlimaloureiro/golog/repositories/tasks/file"
+	"github.com/mlimaloureiro/golog/repositories/tasks/file/csv"
+	tasksServices "github.com/mlimaloureiro/golog/services/tasks"
 
 	"github.com/codegangsta/cli"
 	homedir "github.com/mitchellh/go-homedir"
-)
-
-const (
-	exportCsv  = "csv"
-	exportICal = "ical"
-	exportIcs  = "ics"
 )
 
 const alphanumericRegex = "^[a-zA-Z0-9_-]*$"
 const dbFile = "~/.golog"
 
 var dbPath, _ = homedir.Expand(dbFile)
-var repositoryFile *os.File
-var taskRepository repositories.TaskRepositoryInterface
+var taskService tasksServices.TaskService
 var transformer = Transformer{}
 var commands = []cli.Command{
 	{
@@ -61,14 +54,10 @@ var commands = []cli.Command{
 	{
 		Name:         "export",
 		Usage:        "Export all tasks in a specific format",
-		ArgsUsage:    fmt.Sprintf("[%s] [filePath]", strings.Join(getExportFormatNames(), " | ")),
+		ArgsUsage:    fmt.Sprintf("[%s] [filePath]", strings.Join(file.GetFormatNames(), " | ")),
 		Action:       Export,
 		BashComplete: AutocompleteExport,
 	},
-}
-
-func getExportFormatNames() []string {
-	return []string{exportCsv, exportICal, exportIcs}
 }
 
 // Start a given task
@@ -78,7 +67,7 @@ func Start(context *cli.Context) error {
 		return invalidIdentifier(identifier)
 	}
 
-	err := taskRepository.StartTask(identifier)
+	err := taskService.StartTask(identifier)
 
 	if err == nil {
 		fmt.Println("Started tracking ", identifier)
@@ -93,7 +82,7 @@ func Stop(context *cli.Context) error {
 		return invalidIdentifier(identifier)
 	}
 
-	err := taskRepository.PauseTask(identifier)
+	err := taskService.PauseTask(identifier)
 
 	if err == nil {
 		fmt.Println("Stopped tracking ", identifier)
@@ -108,7 +97,7 @@ func Status(context *cli.Context) error {
 		return invalidIdentifier(identifier)
 	}
 
-	task, err := taskRepository.GetTask(identifier)
+	task, err := taskService.GetTask(identifier)
 	if err != nil {
 		return err
 	}
@@ -120,7 +109,7 @@ func Status(context *cli.Context) error {
 // List lists all tasks
 func List(context *cli.Context) error {
 	var err error
-	transformer.LoadedTasks, err = taskRepository.GetTasks()
+	transformer.LoadedTasks, err = taskService.GetTasks()
 	if err != nil {
 		return err
 	}
@@ -133,65 +122,31 @@ func List(context *cli.Context) error {
 
 // Export all tasks to a specific format
 func Export(context *cli.Context) error {
-	formatDefaultExtensionMap := map[string]string{
-		"csv":  ".csv",
-		"ical": ".ics",
-		"ics":  ".ics",
-	}
-	format, outputFilePath := context.Args().Get(0), context.Args().Get(1)
+	format, filePath := file.Format(strings.ToLower(context.Args().Get(0))), context.Args().Get(1)
 
 	if format == "" {
-		format = exportCsv
-	} else {
-		format = strings.ToLower(format)
+		format = file.CSV
 	}
 
-	if outputFilePath == "" {
-		outputFilePath = fmt.Sprintf("./golog%s", formatDefaultExtensionMap[format])
+	if filePath == "" {
+		filePath = fmt.Sprintf("./golog%s", file.GetFormatFileExtension(format))
 	}
 
-	outputFilePath, err := filepath.Abs(outputFilePath)
+	filePath, err := filepath.Abs(filePath)
 	if err != nil {
 		return err
 	}
 
-	tasks, err := taskRepository.GetTasks()
-	if err != nil {
-		return err
-	}
-
-	var file *os.File
-	file, err = os.OpenFile(outputFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	var exporter repositories.TaskRepositoryInterface
-	switch format {
-	case exportCsv:
-		exporter = csv.NewTaskRepository(file)
-	case exportICal:
-		fallthrough
-	case exportIcs:
-		exporter = ical.NewTaskRepository(file)
-	}
-
-	if exporter == nil {
-		return fmt.Errorf("invalid format \"%s\"", format)
-	}
-
-	err = exporter.SetTasks(tasks)
+	err = taskService.Export(format, filePath)
 	if err == nil {
-		fmt.Println("Exported tasks to ", outputFilePath)
+		fmt.Println("Exported tasks to ", filePath)
 	}
-
 	return err
 }
 
 // Clear all data
 func Clear(context *cli.Context) error {
-	err := repositoryFile.Truncate(0)
+	err := taskService.DeleteTasks()
 	if err == nil {
 		fmt.Println("All tasks deleted")
 	}
@@ -201,7 +156,7 @@ func Clear(context *cli.Context) error {
 // AutocompleteTasks loads tasks from repository and show them for completion
 func AutocompleteTasks(context *cli.Context) {
 	var err error
-	transformer.LoadedTasks, err = taskRepository.GetTasks()
+	transformer.LoadedTasks, err = taskService.GetTasks()
 	// This will complete if no args are passed
 	//   or there is problem with tasks repo
 	if len(context.Args()) > 0 || err != nil {
@@ -219,7 +174,7 @@ func AutocompleteExport(context *cli.Context) {
 		return
 	}
 
-	for _, exporter := range getExportFormatNames() {
+	for _, exporter := range file.GetFormatNames() {
 		fmt.Println(exporter)
 	}
 }
@@ -240,17 +195,7 @@ func runCliApp() (err error) {
 	// @todo remove this from here, should be in file repo implementation
 	checkInitialDbFile()
 
-	repositoryFile, err := os.OpenFile(dbPath, os.O_RDWR|os.O_APPEND, 0600)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := repositoryFile.Close(); err == nil {
-			err = closeErr
-		}
-	}()
-
-	taskRepository = csv.NewTaskRepository(repositoryFile)
+	taskService = tasksServices.New(csv.New(dbPath))
 
 	app := cli.NewApp()
 	app.Name = "Golog"

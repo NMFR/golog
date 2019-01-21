@@ -1,80 +1,67 @@
-package ical // import github.com/mlimaloureiro/golog/repositories/file/ical
+package csv // import github.com/mlimaloureiro/golog/repositories/tasks/file/csv
 
 import (
-	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math"
+	"os"
 	"regexp"
 	"testing"
 	"time"
 
 	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
-	"github.com/mlimaloureiro/golog/repositories"
+	tasksRepositories "github.com/mlimaloureiro/golog/repositories/tasks"
 
 	"github.com/stretchr/testify/assert"
 )
 
 const (
-	testICalEmptyContent = `BEGIN:VCALENDAR
-SUMMARY:2.0
-PRODID:-//mlimaloureiro/golog
-CALSCALE:GREGORIAN
-END:VCALENDAR`
-	testICalContent = `BEGIN:VCALENDAR
-SUMMARY:2.0
-PRODID:-//mlimaloureiro/golog
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-SUMMARY:first-task
-DTSTART:20190101T100000Z
-DTEND:20190101T100100Z
-END:VEVENT
-BEGIN:VEVENT
-SUMMARY:first-task
-DTSTART:20190101T100200Z
-DTEND:20190101T100600Z
-END:VEVENT
-BEGIN:VEVENT
-SUMMARY:second-task
-DTSTART:20190101T100000Z
-DTEND:20190101T100400Z
-END:VEVENT
-BEGIN:VEVENT
-SUMMARY:last-task
-DTSTART:20190101T100000Z
-END:VEVENT
-END:VCALENDAR`
-	otherTestICalContent = `BEGIN:VCALENDAR
-SUMMARY:2.0
-PRODID:-//mlimaloureiro/golog
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-SUMMARY:first-task
-DTSTART:20100601T150000Z
-END:VEVENT
-BEGIN:VEVENT
-SUMMARY:second-task
-DTSTART:20190101T100000Z
-DTEND:20190101T100400Z
-END:VEVENT
-BEGIN:VEVENT
-SUMMARY:last-task
-DTSTART:20190101T100000Z
-END:VEVENT
-END:VCALENDAR`
+	testCsvContent = `first-task,start,2019-01-01T10:00:00Z
+first-task,stop,2019-01-01T10:01:00Z
+second-task,start,2019-01-01T10:00:00Z
+second-task,stop,2019-01-01T10:04:00Z
+first-task,start,2019-01-01T10:02:00Z
+first-task,stop,2019-01-01T10:06:00Z
+last-task,start,2019-01-01T10:00:00Z
+`
+	otherTestCsvContent = `first-task,start,2010-06-01T15:00:00Z
+second-task,start,2019-01-01T10:00:00Z
+second-task,stop,2019-01-01T10:04:00Z
+last-task,start,2019-01-01T10:00:00Z
+`
 )
+
+func getFileContent(t *testing.T, filePath string) string {
+	stringBytes, err := ioutil.ReadFile(filePath)
+	assert.NoError(t, err)
+	return string(stringBytes)
+}
+
+func setFileContent(t *testing.T, filePath string, content string) {
+	file, err := os.Create(filePath)
+	assert.NoError(t, err)
+	_, err = file.WriteString(content)
+	assert.NoError(t, err)
+	err = file.Close()
+	assert.NoError(t, err)
+}
 
 func TestTaskRepository(t *testing.T) {
 	t.Run("implements TaskRepositoryInterface", func(t *testing.T) {
-		buffer := bytes.Buffer{}
-		repository := NewTaskRepository(&buffer)
-		assert.Implements(t, (*repositories.TaskRepositoryInterface)(nil), repository)
+		setFileContent(t, "fixtures/test.csv", testCsvContent)
+		repository := New("fixtures/test.csv")
+		assert.Implements(t, (*tasksRepositories.TaskRepositoryInterface)(nil), repository)
+	})
+
+	t.Run("implements StarterPauserTaskRepositoryInterface", func(t *testing.T) {
+		setFileContent(t, "fixtures/test.csv", testCsvContent)
+		repository := New("fixtures/test.csv")
+		assert.Implements(t, (*tasksRepositories.StarterPauserTaskRepositoryInterface)(nil), repository)
 	})
 
 	t.Run("GetTasks()", func(t *testing.T) {
-		buffer := bytes.Buffer{}
-		buffer.WriteString(testICalContent)
-		taskRepository := NewTaskRepository(&buffer)
+		setFileContent(t, "fixtures/test.csv", testCsvContent)
+		taskRepository := New("fixtures/test.csv")
 		tasks, err := taskRepository.GetTasks()
 
 		assert.NoError(t, err)
@@ -115,9 +102,8 @@ func TestTaskRepository(t *testing.T) {
 
 	t.Run("GetTask()", func(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
-			buffer := bytes.Buffer{}
-			buffer.WriteString(testICalContent)
-			taskRepository := NewTaskRepository(&buffer)
+			setFileContent(t, "fixtures/test.csv", testCsvContent)
+			taskRepository := New("fixtures/test.csv")
 			task, err := taskRepository.GetTask("first-task")
 
 			assert.NoError(t, err)
@@ -131,9 +117,7 @@ func TestTaskRepository(t *testing.T) {
 		})
 
 		t.Run("success (unknown task)", func(t *testing.T) {
-			buffer := bytes.Buffer{}
-			buffer.WriteString(testICalContent)
-			taskRepository := NewTaskRepository(&buffer)
+			taskRepository := New("fixtures/test.csv")
 			task, err := taskRepository.GetTask("unknown-task")
 
 			assert.NoError(t, err)
@@ -142,8 +126,10 @@ func TestTaskRepository(t *testing.T) {
 	})
 
 	t.Run("StartTask() PauseTask()", func(t *testing.T) {
-		buffer := bytes.Buffer{}
-		taskRepository := NewTaskRepository(&buffer)
+		taskRepository := New("fixtures/write_test.csv")
+		defer func() {
+			os.Remove("fixtures/write_test.csv")
+		}()
 
 		err := taskRepository.StartTask("first-task")
 		assert.NoError(t, err)
@@ -163,19 +149,22 @@ func TestTaskRepository(t *testing.T) {
 		err = taskRepository.StartTask("last-task")
 		assert.NoError(t, err)
 
-		dateRegExpPattern := "\\d{4}\\d{2}\\d{2}T\\d{2}\\d{2}\\d{2}Z"
-		testICalContentRegexpString := regexp.MustCompile(dateRegExpPattern).ReplaceAllString(testICalContent, dateRegExpPattern)
-		testICalContentRegexpString = "^" + regexp.MustCompile("\\n").ReplaceAllString(testICalContentRegexpString, "[\\s\\n]*") + "$"
+		dateRegExpPattern := "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+		testCsvContentRegexpString := regexp.MustCompile(dateRegExpPattern).ReplaceAllString(testCsvContent, dateRegExpPattern)
+		testCsvContentRegexpString = "^" + regexp.MustCompile("\\n").ReplaceAllString(testCsvContentRegexpString, "[\\s\\n]*") + "$"
 
-		re := regexp.MustCompile(testICalContentRegexpString)
+		re := regexp.MustCompile(testCsvContentRegexpString)
 
-		assert.True(t, re.MatchString(buffer.String()), "incorrect csv generation", testICalContentRegexpString, buffer.String())
+		fileContent := getFileContent(t, "fixtures/write_test.csv")
+		assert.True(t, re.MatchString(fileContent), "incorrect csv generation", testCsvContentRegexpString, fileContent)
 	})
 
 	t.Run("SetTask()", func(t *testing.T) {
-		buffer := bytes.Buffer{}
-		buffer.WriteString(testICalContent)
-		taskRepository := NewTaskRepository(&buffer)
+		setFileContent(t, "fixtures/write_test.csv", testCsvContent)
+		taskRepository := New("fixtures/write_test.csv")
+		defer func() {
+			os.Remove("fixtures/write_test.csv")
+		}()
 
 		err := taskRepository.SetTask(tasksModel.Task{
 			Identifier: "first-task",
@@ -184,13 +173,16 @@ func TestTaskRepository(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, otherTestICalContent, buffer.String(), "incorrect csv generation", otherTestICalContent, buffer.String())
+		fileContent := getFileContent(t, "fixtures/write_test.csv")
+		assert.Equal(t, otherTestCsvContent, fileContent, "incorrect csv generation", otherTestCsvContent, fileContent)
 	})
 
 	t.Run("SetTask()", func(t *testing.T) {
 		t.Run("3 tasks", func(t *testing.T) {
-			buffer := bytes.Buffer{}
-			taskRepository := NewTaskRepository(&buffer)
+			taskRepository := New("fixtures/write_test.csv")
+			defer func() {
+				os.Remove("fixtures/write_test.csv")
+			}()
 
 			tasks := tasksModel.Collection{
 				{Identifier: "first-task", Activity: []tasksModel.TaskActivity{
@@ -206,18 +198,22 @@ func TestTaskRepository(t *testing.T) {
 
 			err := taskRepository.SetTasks(tasks)
 			assert.NoError(t, err)
-			assert.Equal(t, otherTestICalContent, buffer.String(), "incorrect csv generation", otherTestICalContent, buffer.String())
+			fileContent := getFileContent(t, "fixtures/write_test.csv")
+			assert.Equal(t, otherTestCsvContent, fileContent, "incorrect csv generation", otherTestCsvContent, fileContent)
 		})
 
 		t.Run("0 tasks", func(t *testing.T) {
-			buffer := bytes.Buffer{}
-			taskRepository := NewTaskRepository(&buffer)
+			taskRepository := New("fixtures/write_test.csv")
+			defer func() {
+				os.Remove("fixtures/write_test.csv")
+			}()
 
 			tasks := tasksModel.Collection{}
 
 			err := taskRepository.SetTasks(tasks)
 			assert.NoError(t, err)
-			assert.Equal(t, testICalEmptyContent, buffer.String(), "incorrect csv generation", testICalEmptyContent, buffer.String())
+			fileContent := getFileContent(t, "fixtures/write_test.csv")
+			assert.Equal(t, "", fileContent, "incorrect csv generation", "", fileContent)
 		})
 	})
 }
