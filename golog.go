@@ -42,6 +42,13 @@ var commands = []cli.Command{
 		BashComplete: AutocompleteTasks,
 	},
 	{
+		Name:         "delete",
+		Usage:        "Delete a task",
+		ArgsUsage:    "[task_name]",
+		Action:       Delete,
+		BashComplete: AutocompleteTasks,
+	},
+	{
 		Name:   "clear",
 		Usage:  "Clear all data",
 		Action: Clear,
@@ -142,6 +149,20 @@ func Export(context *cli.Context) error {
 		fmt.Println("Exported tasks to ", filePath)
 	}
 	return err
+}
+
+// Delete one task
+func Delete(context *cli.Context) error {
+	identifier := context.Args().First()
+	if !IsValidIdentifier(identifier) {
+		return invalidIdentifier(identifier)
+	}
+
+	err := taskService.DeleteTask(identifier)
+	if err == nil {
+		fmt.Println("Deleted task", identifier)
+	}
+	return nil
 }
 
 // Clear all data
