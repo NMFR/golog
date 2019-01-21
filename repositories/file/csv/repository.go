@@ -1,4 +1,4 @@
-package repositories // import github.com/mlimaloureiro/golog/repositories
+package csv // import github.com/mlimaloureiro/golog/repositories/file/csv
 
 import (
 	"encoding/csv"
@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/mlimaloureiro/golog/models"
+	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
 )
 
 const (
@@ -16,17 +16,39 @@ const (
 
 type taskAction string
 
-// CsvTaskRepository is a Task repository that stores its data in the CSV format
-type CsvTaskRepository struct {
+func formatTime(at time.Time) string {
+	return at.Format(time.RFC3339)
+}
+
+func parseTime(at string) (time.Time, error) {
+	then, err := time.Parse(time.RFC3339, at)
+	return then, err
+}
+
+func tryParseTime(str string) time.Time {
+	date, _ := parseTime(str)
+	return date
+}
+
+func trySeek(readWriter io.ReadWriter, offset int64, whence int) (int64, error) {
+	seeker, isSeekable := readWriter.(io.Seeker)
+	if isSeekable == false {
+		return 0, nil
+	}
+	return seeker.Seek(offset, whence)
+}
+
+// TaskRepository is a Task repository that stores its data in the CSV format
+type TaskRepository struct {
 	readWriter io.ReadWriter
 }
 
-// NewCsvTaskRepository creates a new CsvTaskRepository
-func NewCsvTaskRepository(readWriter io.ReadWriter) CsvTaskRepository {
-	return CsvTaskRepository{readWriter}
+// NewTaskRepository creates a new TaskRepository
+func NewTaskRepository(readWriter io.ReadWriter) TaskRepository {
+	return TaskRepository{readWriter}
 }
 
-func (repository CsvTaskRepository) writeTaskAction(identifier string, action taskAction, at time.Time) error {
+func (repository TaskRepository) writeTaskAction(identifier string, action taskAction, at time.Time) error {
 	writer := csv.NewWriter(repository.readWriter)
 	if err := writer.Write([]string{identifier, string(action), formatTime(at)}); err != nil {
 		return err
@@ -40,7 +62,7 @@ func (repository CsvTaskRepository) writeTaskAction(identifier string, action ta
 
 // StartTask starts the Task with the identifier if the Task is not already running
 //  If the Task does not exist it will be created
-func (repository CsvTaskRepository) StartTask(identifier string) error {
+func (repository TaskRepository) StartTask(identifier string) error {
 	if _, err := trySeek(repository.readWriter, 0, io.SeekEnd); err != nil {
 		return err
 	}
@@ -48,7 +70,7 @@ func (repository CsvTaskRepository) StartTask(identifier string) error {
 }
 
 // PauseTask pauses the Task with the identifier if the Task is already running
-func (repository CsvTaskRepository) PauseTask(identifier string) error {
+func (repository TaskRepository) PauseTask(identifier string) error {
 	if _, err := trySeek(repository.readWriter, 0, io.SeekEnd); err != nil {
 		return err
 	}
@@ -56,7 +78,7 @@ func (repository CsvTaskRepository) PauseTask(identifier string) error {
 }
 
 // SetTask will create or update the Task in the rerpository, if the task already exists in the repository its data will be overriden by the new Task
-func (repository CsvTaskRepository) SetTask(task models.Task) error {
+func (repository TaskRepository) SetTask(task tasksModel.Task) error {
 	tasks, err := repository.GetTasks()
 	if err != nil {
 		return err
@@ -73,7 +95,7 @@ func (repository CsvTaskRepository) SetTask(task models.Task) error {
 }
 
 // SetTasks will delete all tasks of the repository and insert the tasks passed by parameter
-func (repository CsvTaskRepository) SetTasks(tasks models.Tasks) error {
+func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) error {
 	if _, err := trySeek(repository.readWriter, 0, io.SeekStart); err != nil {
 		return err
 	}
@@ -94,7 +116,7 @@ func (repository CsvTaskRepository) SetTasks(tasks models.Tasks) error {
 }
 
 // GetTasks returns all Tasks of the repository
-func (repository CsvTaskRepository) GetTasks() (models.Tasks, error) {
+func (repository TaskRepository) GetTasks() (tasksModel.Collection, error) {
 	if _, err := trySeek(repository.readWriter, 0, io.SeekStart); err != nil {
 		return nil, err
 	}
@@ -106,7 +128,7 @@ func (repository CsvTaskRepository) GetTasks() (models.Tasks, error) {
 		return nil, err
 	}
 
-	tasks := models.Tasks{}
+	tasks := tasksModel.Collection{}
 	for i, line := range rawCsvData {
 		if len(line) != 3 {
 			return nil, fmt.Errorf("csvfile: malformed line %d: %q", i, line)
@@ -120,7 +142,7 @@ func (repository CsvTaskRepository) GetTasks() (models.Tasks, error) {
 
 		task := tasks.GetByIdentifier(identifier)
 		if task == nil {
-			tasks = append(tasks, models.Task{Identifier: identifier})
+			tasks = append(tasks, tasksModel.Task{Identifier: identifier})
 			task = &tasks[len(tasks)-1]
 		}
 
@@ -129,7 +151,7 @@ func (repository CsvTaskRepository) GetTasks() (models.Tasks, error) {
 		switch action {
 		case taskStart:
 			if taskActivity == nil {
-				taskActivity := models.TaskActivity{StartDate: actionTime}
+				taskActivity := tasksModel.TaskActivity{StartDate: actionTime}
 				task.Activity = append(task.Activity, taskActivity)
 			}
 		case taskStop:
@@ -143,7 +165,7 @@ func (repository CsvTaskRepository) GetTasks() (models.Tasks, error) {
 }
 
 // GetTask returns a Task from the repository by identifier
-func (repository CsvTaskRepository) GetTask(identifier string) (*models.Task, error) {
+func (repository TaskRepository) GetTask(identifier string) (*tasksModel.Task, error) {
 	tasks, err := repository.GetTasks()
 	if err != nil {
 		return nil, err

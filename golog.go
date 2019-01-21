@@ -7,8 +7,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mlimaloureiro/golog/models"
+	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
 	"github.com/mlimaloureiro/golog/repositories"
+	"github.com/mlimaloureiro/golog/repositories/file/csv"
+	"github.com/mlimaloureiro/golog/repositories/file/ical"
 
 	"github.com/codegangsta/cli"
 	homedir "github.com/mitchellh/go-homedir"
@@ -25,7 +27,7 @@ const dbFile = "~/.golog"
 
 var dbPath, _ = homedir.Expand(dbFile)
 var repositoryFile *os.File
-var taskRepository models.TaskRepositoryInterface
+var taskRepository repositories.TaskRepositoryInterface
 var transformer = Transformer{}
 var commands = []cli.Command{
 	{
@@ -110,7 +112,7 @@ func Status(context *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	transformer.LoadedTasks = models.Tasks{*task}
+	transformer.LoadedTasks = tasksModel.Collection{*task}
 	fmt.Println(transformer.Transform()[identifier])
 	return nil
 }
@@ -165,14 +167,14 @@ func Export(context *cli.Context) error {
 	}
 	defer file.Close()
 
-	var exporter models.TaskRepositoryInterface
+	var exporter repositories.TaskRepositoryInterface
 	switch format {
 	case exportCsv:
-		exporter = repositories.NewCsvTaskRepository(file)
+		exporter = csv.NewTaskRepository(file)
 	case exportICal:
 		fallthrough
 	case exportIcs:
-		exporter = repositories.NewICalTaskRepository(file)
+		exporter = ical.NewTaskRepository(file)
 	}
 
 	if exporter == nil {
@@ -248,7 +250,7 @@ func runCliApp() (err error) {
 		}
 	}()
 
-	taskRepository = repositories.NewCsvTaskRepository(repositoryFile)
+	taskRepository = csv.NewTaskRepository(repositoryFile)
 
 	app := cli.NewApp()
 	app.Name = "Golog"

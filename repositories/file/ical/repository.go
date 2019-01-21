@@ -1,15 +1,37 @@
-package repositories // import github.com/mlimaloureiro/golog/repositories
+package ical // import github.com/mlimaloureiro/golog/repositories/file/ical
 
 import (
 	"io"
 	"time"
 
-	"github.com/mlimaloureiro/golog/models"
+	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
 
 	"github.com/jordic/goics"
 )
 
 const prodID = "-//mlimaloureiro/golog"
+
+func formatTime(at time.Time) string {
+	return at.Format(time.RFC3339)
+}
+
+func parseTime(at string) (time.Time, error) {
+	then, err := time.Parse(time.RFC3339, at)
+	return then, err
+}
+
+func tryParseTime(str string) time.Time {
+	date, _ := parseTime(str)
+	return date
+}
+
+func trySeek(readWriter io.ReadWriter, offset int64, whence int) (int64, error) {
+	seeker, isSeekable := readWriter.(io.Seeker)
+	if isSeekable == false {
+		return 0, nil
+	}
+	return seeker.Seek(offset, whence)
+}
 
 func writeStrings(writer io.Writer, strings ...string) error {
 	for _, str := range strings {
@@ -30,24 +52,24 @@ func (consumer *calendarConsumer) ConsumeICal(calendar *goics.Calendar, err erro
 	return err
 }
 
-// ICalTaskRepository is a Task repository that stores its data in the ical (ics) format
-type ICalTaskRepository struct {
+// TaskRepository is a Task repository that stores its data in the ical (ics) format
+type TaskRepository struct {
 	readWriter io.ReadWriter
 	Version    string
 	CALSCALE   string
 	TimeFormat string // UTC time format string (layout string passed to time.Format)
 }
 
-// NewICalTaskRepository creates a new ICalTaskRepository
-func NewICalTaskRepository(readWriter io.ReadWriter) ICalTaskRepository {
-	repository := ICalTaskRepository{readWriter: readWriter}
+// NewTaskRepository creates a new TaskRepository
+func NewTaskRepository(readWriter io.ReadWriter) TaskRepository {
+	repository := TaskRepository{readWriter: readWriter}
 	repository.Version = "2.0"
 	repository.CALSCALE = "GREGORIAN"
 	repository.TimeFormat = "20060102T150405Z"
 	return repository
 }
 
-func (repository ICalTaskRepository) writeICalHeader() error {
+func (repository TaskRepository) writeICalHeader() error {
 	err := writeStrings(
 		repository.readWriter,
 		"BEGIN:VCALENDAR\n",
@@ -58,12 +80,12 @@ func (repository ICalTaskRepository) writeICalHeader() error {
 	return err
 }
 
-func (repository ICalTaskRepository) writeICalFooter() error {
+func (repository TaskRepository) writeICalFooter() error {
 	_, err := io.WriteString(repository.readWriter, "END:VCALENDAR")
 	return err
 }
 
-func (repository ICalTaskRepository) writeICalEvent(task models.Task, taskActivity models.TaskActivity) error {
+func (repository TaskRepository) writeICalEvent(task tasksModel.Task, taskActivity tasksModel.TaskActivity) error {
 	if err := writeStrings(
 		repository.readWriter,
 		"BEGIN:VEVENT\n",
@@ -91,7 +113,7 @@ func (repository ICalTaskRepository) writeICalEvent(task models.Task, taskActivi
 
 // StartTask starts the Task with the identifier if the Task is not already running
 //  If the Task does not exist it will be created
-func (repository ICalTaskRepository) StartTask(identifier string) error {
+func (repository TaskRepository) StartTask(identifier string) error {
 	tasks, err := repository.GetTasks()
 	if err != nil {
 		return err
@@ -99,21 +121,21 @@ func (repository ICalTaskRepository) StartTask(identifier string) error {
 
 	task := tasks.GetByIdentifier(identifier)
 	if task == nil {
-		tasks = append(tasks, models.Task{Identifier: identifier, Activity: []models.TaskActivity{}})
+		tasks = append(tasks, tasksModel.Task{Identifier: identifier, Activity: []tasksModel.TaskActivity{}})
 		task = &tasks[len(tasks)-1]
 	}
 
 	if (*task).IsRunning() {
 		return nil
 	}
-	(*task).Activity = append((*task).Activity, models.TaskActivity{StartDate: time.Now()})
+	(*task).Activity = append((*task).Activity, tasksModel.TaskActivity{StartDate: time.Now()})
 
 	err = repository.SetTasks(tasks)
 	return err
 }
 
 // PauseTask pauses the Task with the identifier if the Task is already running
-func (repository ICalTaskRepository) PauseTask(identifier string) error {
+func (repository TaskRepository) PauseTask(identifier string) error {
 	tasks, err := repository.GetTasks()
 	if err != nil {
 		return err
@@ -136,7 +158,7 @@ func (repository ICalTaskRepository) PauseTask(identifier string) error {
 }
 
 // SetTask will create or update the Task in the rerpository, if the task already exists in the repository its data will be overriden by the new Task
-func (repository ICalTaskRepository) SetTask(task models.Task) error {
+func (repository TaskRepository) SetTask(task tasksModel.Task) error {
 	tasks, err := repository.GetTasks()
 	if err != nil {
 		return err
@@ -153,7 +175,7 @@ func (repository ICalTaskRepository) SetTask(task models.Task) error {
 }
 
 // SetTasks will delete all tasks of the repository and insert the tasks passed by parameter
-func (repository ICalTaskRepository) SetTasks(tasks models.Tasks) error {
+func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) error {
 	if _, err := trySeek(repository.readWriter, 0, io.SeekStart); err != nil {
 		return err
 	}
@@ -175,7 +197,7 @@ func (repository ICalTaskRepository) SetTasks(tasks models.Tasks) error {
 }
 
 // GetTasks returns all Tasks of the repository
-func (repository ICalTaskRepository) GetTasks() (models.Tasks, error) {
+func (repository TaskRepository) GetTasks() (tasksModel.Collection, error) {
 	if _, err := trySeek(repository.readWriter, 0, io.SeekStart); err != nil {
 		return nil, err
 	}
@@ -185,12 +207,12 @@ func (repository ICalTaskRepository) GetTasks() (models.Tasks, error) {
 	err := icalDecoder.Decode(&consumer)
 	if err != nil {
 		if err == goics.ErrCalendarNotFound {
-			return models.Tasks{}, nil
+			return tasksModel.Collection{}, nil
 		}
 		return nil, err
 	}
 
-	tasks := models.Tasks{}
+	tasks := tasksModel.Collection{}
 	for _, event := range icalDecoder.Calendar.Events {
 		summaryNode, startDateNode, endDateNode := event.Data["SUMMARY"], event.Data["DTSTART"], event.Data["DTEND"]
 		if summaryNode == nil || startDateNode == nil {
@@ -212,18 +234,18 @@ func (repository ICalTaskRepository) GetTasks() (models.Tasks, error) {
 
 		task := tasks.GetByIdentifier(summaryNode.Val)
 		if task == nil {
-			tasks = append(tasks, models.Task{Identifier: summaryNode.Val})
+			tasks = append(tasks, tasksModel.Task{Identifier: summaryNode.Val})
 			task = &tasks[len(tasks)-1]
 		}
 
-		(*task).Activity = append((*task).Activity, models.TaskActivity{StartDate: startDate, EndDate: endDate})
+		(*task).Activity = append((*task).Activity, tasksModel.TaskActivity{StartDate: startDate, EndDate: endDate})
 	}
 
 	return tasks, nil
 }
 
 // GetTask returns a Task from the repository by identifier
-func (repository ICalTaskRepository) GetTask(identifier string) (*models.Task, error) {
+func (repository TaskRepository) GetTask(identifier string) (*tasksModel.Task, error) {
 	tasks, err := repository.GetTasks()
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-package repositories // import github.com/mlimaloureiro/golog/repositories
+package ical // import github.com/mlimaloureiro/golog/repositories/file/ical
 
 import (
 	"bytes"
@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mlimaloureiro/golog/models"
+	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
+	"github.com/mlimaloureiro/golog/repositories"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -63,23 +64,23 @@ END:VEVENT
 END:VCALENDAR`
 )
 
-func TestICalTaskRepository(t *testing.T) {
+func TestTaskRepository(t *testing.T) {
 	t.Run("implements TaskRepositoryInterface", func(t *testing.T) {
 		buffer := bytes.Buffer{}
-		repository := NewICalTaskRepository(&buffer)
-		assert.Implements(t, (*models.TaskRepositoryInterface)(nil), repository)
+		repository := NewTaskRepository(&buffer)
+		assert.Implements(t, (*repositories.TaskRepositoryInterface)(nil), repository)
 	})
 
 	t.Run("GetTasks()", func(t *testing.T) {
 		buffer := bytes.Buffer{}
 		buffer.WriteString(testICalContent)
-		taskRepository := NewICalTaskRepository(&buffer)
+		taskRepository := NewTaskRepository(&buffer)
 		tasks, err := taskRepository.GetTasks()
 
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(tasks))
 
-		taskMap := make(map[string]models.Task)
+		taskMap := make(map[string]tasksModel.Task)
 		for _, task := range tasks {
 			taskMap[task.Identifier] = task
 		}
@@ -116,7 +117,7 @@ func TestICalTaskRepository(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
 			buffer := bytes.Buffer{}
 			buffer.WriteString(testICalContent)
-			taskRepository := NewICalTaskRepository(&buffer)
+			taskRepository := NewTaskRepository(&buffer)
 			task, err := taskRepository.GetTask("first-task")
 
 			assert.NoError(t, err)
@@ -132,7 +133,7 @@ func TestICalTaskRepository(t *testing.T) {
 		t.Run("success (unknown task)", func(t *testing.T) {
 			buffer := bytes.Buffer{}
 			buffer.WriteString(testICalContent)
-			taskRepository := NewICalTaskRepository(&buffer)
+			taskRepository := NewTaskRepository(&buffer)
 			task, err := taskRepository.GetTask("unknown-task")
 
 			assert.NoError(t, err)
@@ -142,7 +143,7 @@ func TestICalTaskRepository(t *testing.T) {
 
 	t.Run("StartTask() PauseTask()", func(t *testing.T) {
 		buffer := bytes.Buffer{}
-		taskRepository := NewICalTaskRepository(&buffer)
+		taskRepository := NewTaskRepository(&buffer)
 
 		err := taskRepository.StartTask("first-task")
 		assert.NoError(t, err)
@@ -174,11 +175,11 @@ func TestICalTaskRepository(t *testing.T) {
 	t.Run("SetTask()", func(t *testing.T) {
 		buffer := bytes.Buffer{}
 		buffer.WriteString(testICalContent)
-		taskRepository := NewICalTaskRepository(&buffer)
+		taskRepository := NewTaskRepository(&buffer)
 
-		err := taskRepository.SetTask(models.Task{
+		err := taskRepository.SetTask(tasksModel.Task{
 			Identifier: "first-task",
-			Activity: []models.TaskActivity{
+			Activity: []tasksModel.TaskActivity{
 				{StartDate: tryParseTime("2010-06-01T15:00:00Z")},
 			},
 		})
@@ -189,16 +190,16 @@ func TestICalTaskRepository(t *testing.T) {
 	t.Run("SetTask()", func(t *testing.T) {
 		t.Run("3 tasks", func(t *testing.T) {
 			buffer := bytes.Buffer{}
-			taskRepository := NewICalTaskRepository(&buffer)
+			taskRepository := NewTaskRepository(&buffer)
 
-			tasks := models.Tasks{
-				{Identifier: "first-task", Activity: []models.TaskActivity{
+			tasks := tasksModel.Collection{
+				{Identifier: "first-task", Activity: []tasksModel.TaskActivity{
 					{StartDate: tryParseTime("2010-06-01T15:00:00Z")},
 				}},
-				{Identifier: "second-task", Activity: []models.TaskActivity{
+				{Identifier: "second-task", Activity: []tasksModel.TaskActivity{
 					{StartDate: tryParseTime("2019-01-01T10:00:00Z"), EndDate: tryParseTime("2019-01-01T10:04:00Z")},
 				}},
-				{Identifier: "last-task", Activity: []models.TaskActivity{
+				{Identifier: "last-task", Activity: []tasksModel.TaskActivity{
 					{StartDate: tryParseTime("2019-01-01T10:00:00Z")},
 				}},
 			}
@@ -210,9 +211,9 @@ func TestICalTaskRepository(t *testing.T) {
 
 		t.Run("0 tasks", func(t *testing.T) {
 			buffer := bytes.Buffer{}
-			taskRepository := NewICalTaskRepository(&buffer)
+			taskRepository := NewTaskRepository(&buffer)
 
-			tasks := models.Tasks{}
+			tasks := tasksModel.Collection{}
 
 			err := taskRepository.SetTasks(tasks)
 			assert.NoError(t, err)

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mlimaloureiro/golog/models"
+	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
 )
 
 const hourInSeconds = 3600
@@ -16,12 +16,12 @@ func timeFromString(str string) time.Time {
 }
 
 func TestTransform(t *testing.T) {
-	tasks := models.Tasks{
-		{Identifier: "identifier-1", Activity: []models.TaskActivity{
+	tasks := tasksModel.Collection{
+		{Identifier: "identifier-1", Activity: []tasksModel.TaskActivity{
 			{StartDate: timeFromString("2016-01-02T15:04:00Z"), EndDate: timeFromString("2016-01-02T17:04:02Z")},
 			{StartDate: timeFromString("2016-12-29T19:04:00Z"), EndDate: timeFromString("2016-12-29T19:06:02Z")},
 		}},
-		{Identifier: "identifier-2", Activity: []models.TaskActivity{
+		{Identifier: "identifier-2", Activity: []tasksModel.TaskActivity{
 			{StartDate: timeFromString("2016-01-02T15:04:00Z"), EndDate: timeFromString("2016-01-02T16:04:00Z")},
 		}},
 	}
@@ -56,13 +56,13 @@ func TestSecondsToHuman(t *testing.T) {
 }
 
 func TestTrackingToSeconds(t *testing.T) {
-	tasks := models.Tasks{
-		{Identifier: "identifier-1", Activity: []models.TaskActivity{
+	tasks := tasksModel.Collection{
+		{Identifier: "identifier-1", Activity: []tasksModel.TaskActivity{
 			{StartDate: timeFromString("2016-01-02T15:04:00Z"), EndDate: timeFromString("2016-01-02T17:04:02Z")},
 			{StartDate: timeFromString("2016-12-29T19:04:00Z"), EndDate: timeFromString("2016-12-29T19:06:02Z")},
 			{StartDate: timeFromString("2017-01-01T19:06:02Z"), EndDate: timeFromString("2017-01-01T19:06:03Z")},
 		}},
-		{Identifier: "identifier-2", Activity: []models.TaskActivity{
+		{Identifier: "identifier-2", Activity: []tasksModel.TaskActivity{
 			{StartDate: timeFromString("2016-01-02T15:04:00Z"), EndDate: timeFromString("2016-01-02T16:04:00Z")},
 		}},
 	}
