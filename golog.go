@@ -36,6 +36,13 @@ var commands = []cli.Command{
 		BashComplete: AutocompleteTasks,
 	},
 	{
+		Name:         "switch",
+		Usage:        "Switch to a given task, stops all running tasks and starts a given task",
+		ArgsUsage:    "[task_name]",
+		Action:       Switch,
+		BashComplete: AutocompleteTasks,
+	},
+	{
 		Name:         "status",
 		Usage:        "Give status of all tasks",
 		Action:       Status,
@@ -86,6 +93,21 @@ func Stop(context *cli.Context) error {
 
 	if err == nil {
 		fmt.Println("Stopped tracking ", identifier)
+	}
+	return err
+}
+
+// Switch to a given task
+func Switch(context *cli.Context) error {
+	identifier := context.Args().First()
+	if !IsValidIdentifier(identifier) {
+		return invalidIdentifier(identifier)
+	}
+
+	err := taskService.SwitchTask(identifier)
+
+	if err == nil {
+		fmt.Println("Switched to task ", identifier)
 	}
 	return err
 }

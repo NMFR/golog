@@ -136,3 +136,38 @@ func (service TaskService) Export(format file.Format, filePath string) error {
 
 	return nil
 }
+
+// SwitchTask will pause all running tasks and start the task with the identifier
+//  If the Task does not exist it will be created
+func (service TaskService) SwitchTask(identifier string) error {
+	tasks, err := service.GetTasks()
+	if err != nil {
+		return err
+	}
+
+	needToSave := false
+	var taskToStart *tasksModel.Task
+	for i := range tasks {
+		if tasks[i].Identifier == identifier {
+			taskToStart = &tasks[i]
+		} else if taskActivity := tasks[i].GetRunningTaskActivity(); taskActivity != nil {
+			(*taskActivity).EndDate = time.Now()
+			needToSave = true
+		}
+	}
+
+	if taskToStart == nil {
+		tasks = append(tasks, tasksModel.Task{Identifier: identifier})
+		taskToStart = &tasks[len(tasks)-1]
+	}
+
+	if !taskToStart.IsRunning() {
+		(*taskToStart).Activity = append((*taskToStart).Activity, tasksModel.TaskActivity{StartDate: time.Now()})
+		needToSave = true
+	}
+
+	if needToSave {
+		err = service.SetTasks(tasks)
+	}
+	return err
+}
