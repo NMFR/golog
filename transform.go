@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"math"
 
-	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
+	taskModel "github.com/mlimaloureiro/golog/models/tasks"
 )
 
 // Transformer is a type that has loaded all Tasks entries from storage
 type Transformer struct {
-	LoadedTasks tasksModel.Collection
+	LoadedTasks taskModel.Collection
 }
 
 // Transform Transforms all tasks to human readable
@@ -45,6 +45,6 @@ func (transformer *Transformer) SecondsToHuman(totalSeconds int) string {
 
 // TrackingToSeconds get entries from storage by identifier and calculate
 // time between each start/stop for a single identifier
-func (transformer *Transformer) TrackingToSeconds(task tasksModel.Task) int {
-	return (int)(task.Duration().Seconds())
+func (transformer *Transformer) TrackingToSeconds(task taskModel.Task) int {
+	return (int)(task.GetDuration().Seconds())
 }

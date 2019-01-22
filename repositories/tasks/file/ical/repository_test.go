@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
-	tasksRepositories "github.com/mlimaloureiro/golog/repositories/tasks"
+	taskModel "github.com/mlimaloureiro/golog/models/tasks"
+	taskRepositories "github.com/mlimaloureiro/golog/repositories/tasks"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -64,6 +64,16 @@ END:VEVENT
 END:VCALENDAR`
 )
 
+func parseTime(at string) (time.Time, error) {
+	then, err := time.Parse(time.RFC3339, at)
+	return then, err
+}
+
+func tryParseTime(str string) time.Time {
+	date, _ := parseTime(str)
+	return date
+}
+
 func getFileContent(t *testing.T, filePath string) string {
 	stringBytes, err := ioutil.ReadFile(filePath)
 	assert.NoError(t, err)
@@ -83,7 +93,7 @@ func TestTaskRepository(t *testing.T) {
 	t.Run("implements TaskRepositoryInterface", func(t *testing.T) {
 		setFileContent(t, "fixtures/test.ics", testICalContent)
 		repository := New("fixtures/test.ics")
-		assert.Implements(t, (*tasksRepositories.TaskRepositoryInterface)(nil), repository)
+		assert.Implements(t, (*taskRepositories.TaskRepositoryInterface)(nil), repository)
 	})
 
 	t.Run("GetTasks()", func(t *testing.T) {
@@ -94,7 +104,7 @@ func TestTaskRepository(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(tasks))
 
-		taskMap := make(map[string]tasksModel.Task)
+		taskMap := make(map[string]taskModel.Task)
 		for _, task := range tasks {
 			taskMap[task.Identifier] = task
 		}
@@ -116,13 +126,13 @@ func TestTaskRepository(t *testing.T) {
 				task := taskMap[taskCase.taskIdentifier]
 				assert.Equal(t, taskCase.isRunning, task.IsRunning(), "task.IsRunning()")
 				caseDuration := taskCase.duration
-				taskDuration := task.Duration()
+				taskDuration := task.GetDuration()
 				if task.IsRunning() {
 					if diff := time.Duration(math.Abs(float64(taskCase.duration - taskDuration))); diff < (1 * time.Second) {
 						caseDuration = taskDuration
 					}
 				}
-				assert.Equal(t, caseDuration, taskDuration, "task.Duration()")
+				assert.Equal(t, caseDuration, taskDuration, "task.GetDuration()")
 			})
 		}
 	})
@@ -140,7 +150,7 @@ func TestTaskRepository(t *testing.T) {
 
 			assert.Equal(t, "first-task", task.Identifier, "task.Identifier")
 			assert.Equal(t, false, task.IsRunning(), "task.IsRunning()")
-			assert.Equal(t, 5*time.Minute, task.Duration(), "task.Duration()")
+			assert.Equal(t, 5*time.Minute, task.GetDuration(), "task.GetDuration()")
 		})
 
 		t.Run("success (unknown task)", func(t *testing.T) {
@@ -159,9 +169,9 @@ func TestTaskRepository(t *testing.T) {
 			os.Remove("fixtures/write_test.ics")
 		}()
 
-		err := taskRepository.SetTask(tasksModel.Task{
+		err := taskRepository.SetTask(taskModel.Task{
 			Identifier: "first-task",
-			Activity: []tasksModel.TaskActivity{
+			Activity: []taskModel.TaskActivity{
 				{StartDate: tryParseTime("2010-06-01T15:00:00Z")},
 			},
 		})
@@ -171,21 +181,21 @@ func TestTaskRepository(t *testing.T) {
 	})
 
 	t.Run("SetTask()", func(t *testing.T) {
-		t.Run("3 tasks", func(t *testing.T) {
+		t.Run("check repository with tasks", func(t *testing.T) {
 			setFileContent(t, "fixtures/write_test.ics", testICalContent)
 			taskRepository := New("fixtures/write_test.ics")
 			defer func() {
 				os.Remove("fixtures/write_test.ics")
 			}()
 
-			tasks := tasksModel.Collection{
-				{Identifier: "first-task", Activity: []tasksModel.TaskActivity{
+			tasks := taskModel.Collection{
+				{Identifier: "first-task", Activity: []taskModel.TaskActivity{
 					{StartDate: tryParseTime("2010-06-01T15:00:00Z")},
 				}},
-				{Identifier: "second-task", Activity: []tasksModel.TaskActivity{
+				{Identifier: "second-task", Activity: []taskModel.TaskActivity{
 					{StartDate: tryParseTime("2019-01-01T10:00:00Z"), EndDate: tryParseTime("2019-01-01T10:04:00Z")},
 				}},
-				{Identifier: "last-task", Activity: []tasksModel.TaskActivity{
+				{Identifier: "last-task", Activity: []taskModel.TaskActivity{
 					{StartDate: tryParseTime("2019-01-01T10:00:00Z")},
 				}},
 			}
@@ -196,14 +206,14 @@ func TestTaskRepository(t *testing.T) {
 			assert.Equal(t, otherTestICalContent, fileContent, "incorrect ics generation", otherTestICalContent, fileContent)
 		})
 
-		t.Run("0 tasks", func(t *testing.T) {
+		t.Run("check empty repository", func(t *testing.T) {
 			setFileContent(t, "fixtures/write_test.ics", testICalContent)
 			taskRepository := New("fixtures/write_test.ics")
 			defer func() {
 				os.Remove("fixtures/write_test.ics")
 			}()
 
-			tasks := tasksModel.Collection{}
+			tasks := taskModel.Collection{}
 
 			err := taskRepository.SetTasks(tasks)
 			assert.NoError(t, err)

@@ -9,7 +9,8 @@ type Task struct {
 	Activity []TaskActivity
 }
 
-// GetRunningTaskActivity returns the Task's current running TaskActivty or nil if the Task does not have a TaskActivity in progress
+// GetRunningTaskActivity returns the Task's current running TaskActivty or nil
+//  if the Task does not have a TaskActivity in progress
 func (task Task) GetRunningTaskActivity() *TaskActivity {
 	for i := range task.Activity {
 		if task.Activity[i].IsRunning() {
@@ -24,11 +25,11 @@ func (task Task) IsRunning() bool {
 	return task.GetRunningTaskActivity() != nil
 }
 
-// Duration returns the time.Duration of the Task execution time
-func (task Task) Duration() time.Duration {
+// GetDuration returns the time.Duration of the Task execution time
+func (task Task) GetDuration() time.Duration {
 	var duration time.Duration
 	for i := range task.Activity {
-		duration += task.Activity[i].Duration()
+		duration += task.Activity[i].GetDuration()
 	}
 	return duration
 }

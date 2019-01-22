@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
+	taskModel "github.com/mlimaloureiro/golog/models/tasks"
 )
 
 const (
@@ -27,11 +27,6 @@ func parseTime(at string) (time.Time, error) {
 	return then, err
 }
 
-func tryParseTime(str string) time.Time {
-	date, _ := parseTime(str)
-	return date
-}
-
 // TaskRepository is a Task repository that stores its data in the CSV format
 type TaskRepository struct {
 	filePath string
@@ -42,14 +37,19 @@ func New(filePath string) TaskRepository {
 	return TaskRepository{filePath}
 }
 
-func (repository TaskRepository) writeTaskAction(readWriter io.ReadWriter, identifier string, action taskAction, at time.Time) error {
-	writer := csv.NewWriter(readWriter)
-	if err := writer.Write([]string{identifier, string(action), formatTime(at)}); err != nil {
+func (repository TaskRepository) writeTaskAction(
+	writer io.Writer,
+	identifier string,
+	action taskAction,
+	at time.Time,
+) error {
+	csvWriter := csv.NewWriter(writer)
+	if err := csvWriter.Write([]string{identifier, string(action), formatTime(at)}); err != nil {
 		return err
 	}
 
-	writer.Flush()
-	err := writer.Error()
+	csvWriter.Flush()
+	err := csvWriter.Error()
 
 	return err
 }
@@ -85,8 +85,9 @@ func (repository TaskRepository) PauseTask(identifier string) (err error) {
 	return repository.writeTaskAction(file, identifier, taskStop, time.Now())
 }
 
-// SetTask will create or update the Task in the rerpository, if the task already exists in the repository its data will be overriden by the new Task
-func (repository TaskRepository) SetTask(task tasksModel.Task) error {
+// SetTask will create or update the Task in the rerpository,
+//  if the task already exists in the repository its data will be overriden by the new Task
+func (repository TaskRepository) SetTask(task taskModel.Task) error {
 	tasks, err := repository.GetTasks()
 	if err != nil {
 		// Ignore "no such file" errors here:
@@ -94,7 +95,7 @@ func (repository TaskRepository) SetTask(task tasksModel.Task) error {
 			return err
 		}
 
-		tasks = tasksModel.Collection{}
+		tasks = taskModel.Collection{}
 	}
 
 	if taskPtr := tasks.GetByIdentifier(task.Identifier); taskPtr == nil {
@@ -108,7 +109,7 @@ func (repository TaskRepository) SetTask(task tasksModel.Task) error {
 }
 
 // SetTasks will delete all tasks of the repository and insert the tasks passed by parameter
-func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) (err error) {
+func (repository TaskRepository) SetTasks(tasks taskModel.Collection) (err error) {
 	file, err := os.OpenFile(repository.filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
@@ -135,7 +136,7 @@ func (repository TaskRepository) SetTasks(tasks tasksModel.Collection) (err erro
 }
 
 // GetTasks returns all Tasks of the repository
-func (repository TaskRepository) GetTasks() (tasks tasksModel.Collection, err error) {
+func (repository TaskRepository) GetTasks() (tasks taskModel.Collection, err error) {
 	file, err := os.OpenFile(repository.filePath, os.O_RDONLY, 0600)
 	if err != nil {
 		return nil, err
@@ -153,7 +154,7 @@ func (repository TaskRepository) GetTasks() (tasks tasksModel.Collection, err er
 		return nil, err
 	}
 
-	tasks = tasksModel.Collection{}
+	tasks = taskModel.Collection{}
 	for i, line := range rawCsvData {
 		if len(line) != 3 {
 			return nil, fmt.Errorf("csvfile: malformed line %d: %q", i, line)
@@ -167,7 +168,7 @@ func (repository TaskRepository) GetTasks() (tasks tasksModel.Collection, err er
 
 		task := tasks.GetByIdentifier(identifier)
 		if task == nil {
-			tasks = append(tasks, tasksModel.Task{Identifier: identifier})
+			tasks = append(tasks, taskModel.Task{Identifier: identifier})
 			task = &tasks[len(tasks)-1]
 		}
 
@@ -176,7 +177,7 @@ func (repository TaskRepository) GetTasks() (tasks tasksModel.Collection, err er
 		switch action {
 		case taskStart:
 			if taskActivity == nil {
-				taskActivity := tasksModel.TaskActivity{StartDate: actionTime}
+				taskActivity := taskModel.TaskActivity{StartDate: actionTime}
 				task.Activity = append(task.Activity, taskActivity)
 			}
 		case taskStop:
@@ -190,7 +191,7 @@ func (repository TaskRepository) GetTasks() (tasks tasksModel.Collection, err er
 }
 
 // GetTask returns a Task from the repository by identifier
-func (repository TaskRepository) GetTask(identifier string) (*tasksModel.Task, error) {
+func (repository TaskRepository) GetTask(identifier string) (*taskModel.Task, error) {
 	tasks, err := repository.GetTasks()
 	if err != nil {
 		return nil, err

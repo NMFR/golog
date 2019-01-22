@@ -1,11 +1,11 @@
 package tasks // import github.com/mlimaloureiro/golog/repositories/tasks
 
-import tasksModel "github.com/mlimaloureiro/golog/models/tasks"
+import taskModel "github.com/mlimaloureiro/golog/models/tasks"
 
 // TaskRepositoryInterface represents a repository of Tasks
 type TaskRepositoryInterface interface {
-	SetTask(task tasksModel.Task) error
-	SetTasks(tasks tasksModel.Collection) error
-	GetTask(identifier string) (*tasksModel.Task, error)
-	GetTasks( /*from *time.Time, to *time.Time*/ ) (tasksModel.Collection, error)
+	SetTask(task taskModel.Task) error
+	SetTasks(tasks taskModel.Collection) error
+	GetTask(identifier string) (*taskModel.Task, error)
+	GetTasks( /*from *time.Time, to *time.Time*/ ) (taskModel.Collection, error)
 }

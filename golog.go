@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"strings"
 
-	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
+	taskModel "github.com/mlimaloureiro/golog/models/tasks"
 	"github.com/mlimaloureiro/golog/repositories/tasks/file"
 	"github.com/mlimaloureiro/golog/repositories/tasks/file/csv"
-	tasksServices "github.com/mlimaloureiro/golog/services/tasks"
+	taskServices "github.com/mlimaloureiro/golog/services/tasks"
 
 	"github.com/codegangsta/cli"
 	homedir "github.com/mitchellh/go-homedir"
@@ -20,7 +20,7 @@ const alphanumericRegex = "^[a-zA-Z0-9_-]*$"
 const dbFile = "~/.golog"
 
 var dbPath, _ = homedir.Expand(dbFile)
-var taskService tasksServices.TaskService
+var taskService taskServices.TaskService
 var transformer = Transformer{}
 var commands = []cli.Command{
 	{
@@ -101,7 +101,7 @@ func Status(context *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	transformer.LoadedTasks = tasksModel.Collection{*task}
+	transformer.LoadedTasks = taskModel.Collection{*task}
 	fmt.Println(transformer.Transform()[identifier])
 	return nil
 }
@@ -195,7 +195,7 @@ func runCliApp() (err error) {
 	// @todo remove this from here, should be in file repo implementation
 	checkInitialDbFile()
 
-	taskService = tasksServices.New(csv.New(dbPath))
+	taskService = taskServices.New(csv.New(dbPath))
 
 	app := cli.NewApp()
 	app.Name = "Golog"

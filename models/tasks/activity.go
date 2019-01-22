@@ -13,8 +13,8 @@ func (taskActivity TaskActivity) IsRunning() bool {
 	return taskActivity.EndDate.IsZero()
 }
 
-// Duration returns the time.Duration of the TaskActivity date interval
-func (taskActivity TaskActivity) Duration() time.Duration {
+// GetDuration returns the time.Duration of the TaskActivity date interval
+func (taskActivity TaskActivity) GetDuration() time.Duration {
 	endDate := taskActivity.EndDate
 	if endDate.IsZero() {
 		endDate = time.Now()

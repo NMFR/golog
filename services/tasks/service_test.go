@@ -9,7 +9,7 @@ import (
 )
 
 func TestTaskService(t *testing.T) {
-	t.Run("StartTask() PauseTask()", func(t *testing.T) {
+	t.Run("StartTask() and PauseTask()", func(t *testing.T) {
 		repository := memory.New()
 		service := New(&repository)
 
@@ -34,7 +34,7 @@ func TestTaskService(t *testing.T) {
 		assert.False(t, repositoryTask.IsRunning())
 	})
 
-	t.Run("DeleteTask() DeleteTasks()", func(t *testing.T) {
+	t.Run("DeleteTask() and DeleteTasks()", func(t *testing.T) {
 		repository := memory.New()
 		service := New(&repository)
 

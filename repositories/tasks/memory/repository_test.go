@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	tasksModel "github.com/mlimaloureiro/golog/models/tasks"
-	tasksRepositories "github.com/mlimaloureiro/golog/repositories/tasks"
+	taskModel "github.com/mlimaloureiro/golog/models/tasks"
+	taskRepositories "github.com/mlimaloureiro/golog/repositories/tasks"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -19,16 +19,16 @@ func timeFromString(str string) time.Time {
 func TestTaskRepository(t *testing.T) {
 	t.Run("implements TaskRepositoryInterface", func(t *testing.T) {
 		repository := New()
-		assert.Implements(t, (*tasksRepositories.TaskRepositoryInterface)(nil), &repository)
+		assert.Implements(t, (*taskRepositories.TaskRepositoryInterface)(nil), &repository)
 	})
 
-	t.Run("SetTasks() GetTasks()", func(t *testing.T) {
-		caseTasks := tasksModel.Collection{
-			tasksModel.Task{Identifier: "first-task", Activity: []tasksModel.TaskActivity{
+	t.Run("SetTasks() and GetTasks()", func(t *testing.T) {
+		caseTasks := taskModel.Collection{
+			taskModel.Task{Identifier: "first-task", Activity: []taskModel.TaskActivity{
 				{StartDate: timeFromString("2017-01-01T19:06:02Z"), EndDate: timeFromString("2017-01-01T19:06:03Z")},
 				{StartDate: timeFromString("2016-01-02T15:04:00Z")},
 			}},
-			tasksModel.Task{Identifier: "second-task", Activity: []tasksModel.TaskActivity{
+			taskModel.Task{Identifier: "second-task", Activity: []taskModel.TaskActivity{
 				{StartDate: timeFromString("2016-01-02T15:04:00Z")},
 			}},
 		}
@@ -47,13 +47,13 @@ func TestTaskRepository(t *testing.T) {
 		assert.True(t, reflect.DeepEqual(caseTasks, repositoryTasks))
 	})
 
-	t.Run("SetTask() GetTask()", func(t *testing.T) {
-		caseTasks := tasksModel.Collection{
-			tasksModel.Task{Identifier: "first-task", Activity: []tasksModel.TaskActivity{
+	t.Run("SetTask() and GetTask()", func(t *testing.T) {
+		caseTasks := taskModel.Collection{
+			taskModel.Task{Identifier: "first-task", Activity: []taskModel.TaskActivity{
 				{StartDate: timeFromString("2017-01-01T19:06:02Z"), EndDate: timeFromString("2017-01-01T19:06:03Z")},
 				{StartDate: timeFromString("2016-01-02T15:04:00Z")},
 			}},
-			tasksModel.Task{Identifier: "second-task", Activity: []tasksModel.TaskActivity{
+			taskModel.Task{Identifier: "second-task", Activity: []taskModel.TaskActivity{
 				{StartDate: timeFromString("2016-01-02T15:04:00Z")},
 			}},
 		}

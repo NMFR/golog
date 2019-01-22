@@ -3,7 +3,7 @@ package file // import github.com/mlimaloureiro/golog/repositories/tasks/file
 import (
 	"fmt"
 
-	tasksRepositories "github.com/mlimaloureiro/golog/repositories/tasks"
+	taskRepositories "github.com/mlimaloureiro/golog/repositories/tasks"
 	"github.com/mlimaloureiro/golog/repositories/tasks/file/csv"
 	"github.com/mlimaloureiro/golog/repositories/tasks/file/ical"
 )
@@ -40,8 +40,8 @@ func GetFormatNames() []string {
 }
 
 // GetTaskFileRepository returns the repository of the format that will presist in the file present at filePath
-func GetTaskFileRepository(format Format, filePath string) (tasksRepositories.TaskRepositoryInterface, error) {
-	var repository tasksRepositories.TaskRepositoryInterface
+func GetTaskFileRepository(format Format, filePath string) (taskRepositories.TaskRepositoryInterface, error) {
+	var repository taskRepositories.TaskRepositoryInterface
 	switch format {
 	case CSV:
 		repository = csv.New(filePath)
