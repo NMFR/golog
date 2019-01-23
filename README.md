@@ -94,6 +94,22 @@ The available formats are:
 golog export [csv | ical] [file_path]
 ```
 
+# Development
+
+If you are cloning the repository it is recommended to install the git hooks present in `./.gitHooks`.
+
+git 2.9 or higher:
+``` sh
+git config core.hooksPath .gitHooks
+```
+
+git 2.8 or lower:
+``` sh
+find .git/hooks -type l -exec rm {} \; && find .gitHooks -type f -exec ln -sf ../../{} .git/hooks/ \;
+```
+
+The pre commit hook will run `gofmt` (to format the staged files) and `go test` (to run all the tests). If the tests fail the commit will be cancelled.
+
 # Contribution Guidelines
 @TODO
 If you have any questions feel free to link @mlimaloureiro to the issue in question and we can review it together.

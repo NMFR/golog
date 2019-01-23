@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# use "git config core.hooksPath .gitHooks" to install the hooks
+
+./scripts/go-format-and-git-add.sh
+
+./scripts/check-line-length.sh
+
+# gometalinter ./...
+ 
+go test --cover ./... 
